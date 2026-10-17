@@ -3,6 +3,8 @@
 
 // The Droplet: the system's one element. A glyph that, every TICK seconds,
 // becomes a different random character.
+const CYCLE: bool = false;       // false holds STILL_CHAR; true cycles every TICK
+const STILL_CHAR: u32 = 66u;     // B
 const TICK: f32 = 0.75;          // seconds between character changes
 const FIRST_CHAR: u32 = 33u;     // the pool: printable ASCII, '!' through '~'
 const CHAR_COUNT: u32 = 94u;
@@ -17,6 +19,7 @@ fn hash(n: u32) -> f32 {
 
 // The character a droplet with the given seed shows at time t.
 fn droplet_char(seed: u32, t: f32) -> u32 {
+  if (!CYCLE) { return STILL_CHAR; }
   let tick = u32(floor(t / TICK));
   return FIRST_CHAR + u32(hash(seed * 7919u + tick) * f32(CHAR_COUNT));
 }
@@ -67,12 +70,38 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VertexOut {
   return out;
 }
 
+// The tube look.
+const STRIPE_PERIOD: f32 = 6.0;  // scanline spacing, in drawn pixels
+const STRIPE_DEPTH: f32 = 0.55;  // how dark the gap between lines gets, 0..1
+const BLUR: f32 = 0.06;          // edge softness, in SDF units (0.5 spans SPREAD px of the cell)
+const GLOW: f32 = 0.35;          // halo strength beyond the edge
+const GLOW_REACH: f32 = 0.25;    // halo reach, in SDF units
+const INK: vec3<f32> = vec3<f32>(0.6, 1.0, 0.65);
+
+// Soft coverage: the edge spread over BLUR either side, plus a halo that
+// decays with distance outside the edge.
+fn glyph_soft(code: u32, uv: vec2<f32>) -> f32 {
+  let d = glyph_sdf(code, uv);
+  let inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+  let body = smoothstep(0.5 - BLUR, 0.5 + BLUR, d);
+  let halo = GLOW * exp(-max(0.5 - d, 0.0) / GLOW_REACH * 3.0) * (1.0 - body);
+  return (body + halo) * inside;
+}
+
+// Scanlines: a raised cosine across the rows, dark between lines.
+fn stripes(y_px: f32) -> f32 {
+  let phase = fract(y_px / STRIPE_PERIOD);
+  let line = 0.5 + 0.5 * cos(phase * 6.2831853);
+  return 1.0 - STRIPE_DEPTH * (1.0 - line);
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space with the origin in the middle, one unit = screen height.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y;
   let size = 0.25;                       // the character's cell, in screen heights
   let uv = p / size + vec2<f32>(0.5);
-  let ink = glyph(droplet_char(1u, u.time), uv);
-  return vec4<f32>(vec3<f32>(0.6, 1.0, 0.65) * ink, 1.0);
+  let ink = glyph_soft(droplet_char(1u, u.time), uv);
+  let col = INK * ink * stripes(in.uv.y * u.resolution.y);
+  return vec4<f32>(col, 1.0);
 }
