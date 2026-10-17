@@ -100,8 +100,14 @@ fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   // The glyph's cell: uv 0..1 across it, y down, so the character reads upright.
   let rel = (p - pr.centre) / size;
   let uv = vec2<f32>(rel.x + 0.5, 0.5 - rel.y);
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return vec3<f32>(0.0); }
-  return tube(glyph_char(g, t), uv, size * u.resolution.y, px, t) * glyph_opacity(g, t);
+  // The aura reaches beyond the cell; the tube stays within it.
+  if (uv.x < -AURA_REACH || uv.x > 1.0 + AURA_REACH || uv.y < -AURA_REACH || uv.y > 1.0 + AURA_REACH) { return vec3<f32>(0.0); }
+  let code = glyph_char(g, t);
+  var col = aura(code, uv);
+  if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+    col += tube(code, uv, size * u.resolution.y, px, t);
+  }
+  return min(col, vec3<f32>(1.0)) * glyph_opacity(g, t);
 }
 
 // ----------------------------------------------------------------- droplet
@@ -235,6 +241,33 @@ fn glow(code: u32, uv: vec2<f32>) -> f32 {
   // spills past it into the cell.
   let halo = SCATTER * exp(-max(0.5 - smear, 0.0) / SCATTER_REACH * 3.0) * (1.0 - body) * smoothstep(0.0, 0.2, smear);
   return (body + halo) * fade(uv);
+}
+
+// ---------------------------------------------------------------------- aura
+//
+// Behind the tube, a third layer: the character's light spread wide and
+// soft, like the glow a bright screen leaves on the air around it. It is a
+// heavy blur of the glyph's shape, tinted, reaching beyond the cell.
+
+const AURA: f32 = 0.45;          // brightness
+const AURA_REACH: f32 = 0.35;    // blur radius, in cell units
+const AURA_TINT: vec3<f32> = vec3<f32>(0.2, 0.9, 0.5);
+
+// The glyph's shape blurred over AURA_REACH: the mean coverage over two
+// rings of taps and the centre.
+fn aura(code: u32, uv: vec2<f32>) -> vec3<f32> {
+  var acc = 0.0;
+  for (var i = 0u; i < 8u; i++) {
+    let a = f32(i) * 0.7853982;   // 45 degree steps
+    let dir = vec2<f32>(cos(a), sin(a));
+    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH));
+    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH * 0.5));
+  }
+  acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv));
+  // Softly to nothing at the reach's edge, so the layer has no border.
+  let edge = smoothstep(-AURA_REACH, 0.0, uv.x) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.x)
+           * smoothstep(-AURA_REACH, 0.0, uv.y) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.y);
+  return AURA_TINT * AURA * (acc / 17.0) * edge;
 }
 
 // The character `code` as seen on the tube, over its cell uv (cell_px pixels
