@@ -34,7 +34,6 @@ const RAIN_NEAR: f32 = 0.3;      // units ahead of the camera
 const RAIN_FAR: f32 = 14.0;      // the furthest, and smallest
 const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
 const RAIN_MARGIN: f32 = 0.3;    // units above the view a droplet is born, and below it that it dies
-const ASPECT: f32 = 16.0 / 9.0;  // the view's width over its height
 
 // ----------------------------------------------------------------- droplet
 const FALL: f32 = 0.28125;       // units per second downward
@@ -56,8 +55,15 @@ pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Rng(0x2545F491)).add_systems(Update, (drift, rain, droplets, glyphs).chain());
+        app.insert_resource(Rng(0x2545F491)).insert_resource(View { aspect: 16.0 / 9.0 }).add_systems(Update, (drift, rain, droplets, glyphs).chain());
     }
+}
+
+/// The shape of the whole view the cameras see, across every display: its
+/// width over its height. The host sets it when it opens the displays.
+#[derive(Resource)]
+pub struct View {
+    pub aspect: f32,
 }
 
 /// Anything that moves: its transform advances by this each second.
@@ -151,12 +157,12 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 
 /// Keeps DROPLETS falling: each one that has gone is replaced by one born
 /// at the top of the box, somewhere in it, reading from a random place.
-fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMut<Rng>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, view: Res<View>, mut rng: ResMut<Rng>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
     for _ in live.iter().count()..DROPLETS {
         let ahead = rng.range(RAIN_NEAR, RAIN_FAR);
-        // The view at that depth: `ahead` units tall, ASPECT times as wide.
-        let half_w = 0.5 * ahead * ASPECT * RAIN_SPREAD;
+        // The view at that depth: `ahead` units tall, and as wide as the view's shape makes it.
+        let half_w = 0.5 * ahead * view.aspect * RAIN_SPREAD;
         let half_h = 0.5 * ahead;
         let x = cam.x + rng.range(-half_w, half_w);
         let z = cam.z - ahead;

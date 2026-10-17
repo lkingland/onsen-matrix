@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::{Monitor, MonitorSelection, WindowMode, WindowRef};
 
-use crate::scene::spawn_camera;
+use crate::scene::{spawn_camera, View};
 use crate::Args;
 
 /// How far the pointer may drift before it counts as movement, in pixels.
@@ -53,6 +53,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, opened: Option<Res<Ope
     // right, with no gaps. (Their reported positions are not usable: winit
     // rounds a fractional scale, so positions and sizes disagree.)
     let full = UVec2::new(chosen.iter().map(|(_, m)| m.physical_width).sum(), chosen.iter().map(|(_, m)| m.physical_height).max().unwrap_or(1));
+    commands.insert_resource(View { aspect: full.x as f32 / full.y as f32 });
     let mut x = 0u32;
     for (entity, m) in chosen {
         let name = m.name.clone().unwrap_or_default();
