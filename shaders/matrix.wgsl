@@ -70,10 +70,10 @@ struct Glyph {
   start: u32,       // its first character's place in the text
 };
 
-const LIFE: f32 = 2.6667;        // seconds from painted to gone
+const LIFE: f32 = 10.0;          // seconds from painted to gone: longer than a run, so a trail spans the screen
 const TRAIL_MIN: f32 = 0.1;      // a painted glyph's brightness at birth is random, between these
 const TRAIL_MAX: f32 = 0.7;
-const DECAY: f32 = 4.0;          // e-folds of fading across a life: bright at first, quickly down to a long tail
+const DECAY: f32 = 3.0;          // e-folds of fading across a life: bright at first, quickly down to a long tail
 const TICK: f32 = 0.75;          // seconds between characters as it fades
 const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height at the near plane, in screen heights
 
