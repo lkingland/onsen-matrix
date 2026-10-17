@@ -108,16 +108,19 @@ const GRILLE_FLOOR: f32 = 0.35;  // how much a stripe lets the other two colours
 const GRILLE_GAIN: f32 = 1.6;    // brightness back after the mask darkens things
 const ROLL: f32 = 18.0;          // scanline roll, in pixels per second
 const BREATHE: f32 = 0.1;        // brightness wobble, as a fraction
-const SMEAR: f32 = 0.03;         // downward glow smear, in cell units
-const SMEAR_GAIN: f32 = 0.85;    // the smear's brightness relative to the body
+const SMEAR: f32 = 0.045;        // downward glow smear, in cell units
+const SMEAR_GAIN: f32 = 0.9;     // the smear's brightness relative to the body
+const EDGE_BLUR: f32 = 0.13;     // edge softness, in SDF units
+const SCATTER: f32 = 0.8;        // halo strength
+const SCATTER_REACH: f32 = 0.45; // halo reach, in SDF units
 
 fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let inside = fade(uv);
   let d = glyph_sdf(code, uv);
   // The smear: the glyph's light also falls a little below itself.
   let smear = max(d, SMEAR_GAIN * glyph_sdf(code, uv - vec2<f32>(0.0, SMEAR)));
-  let body = smoothstep(0.5 - 0.08, 0.5 + 0.08, smear);
-  let halo = 0.5 * exp(-max(0.5 - smear, 0.0) / 0.3 * 3.0) * (1.0 - body);
+  let body = smoothstep(0.5 - EDGE_BLUR, 0.5 + EDGE_BLUR, smear);
+  let halo = SCATTER * exp(-max(0.5 - smear, 0.0) / SCATTER_REACH * 3.0) * (1.0 - body);
   // The grille.
   let sub = u32(floor(px.x / GRILLE_PITCH)) % 3u;
   var mask = vec3<f32>(GRILLE_FLOOR);
