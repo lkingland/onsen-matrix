@@ -32,6 +32,16 @@ pub struct Args {
 
 fn main() {
     let args = Args { hold: std::env::args().any(|a| a == "--hold"), snap: std::env::var("ONSEN_MATRIX_SNAP").ok().map(Into::into) };
+    // Diagnostics knobs, for chasing frame pacing without a rebuild.
+    let env = |k: &str| std::env::var(k).ok();
+    let latency = env("ONSEN_MATRIX_LATENCY").and_then(|v| v.parse().ok()).and_then(std::num::NonZero::new);
+    let windowed = env("ONSEN_MATRIX_WINDOWED").is_some();
+    let present_mode = match env("ONSEN_MATRIX_PRESENT").as_deref() {
+        Some("novsync") => PresentMode::AutoNoVsync,
+        Some("immediate") => PresentMode::Immediate,
+        Some("mailbox") => PresentMode::Mailbox,
+        _ => PresentMode::AutoVsync,
+    };
     App::new()
         .insert_resource(args)
         .insert_resource(ClearColor(Color::BLACK))
@@ -46,8 +56,9 @@ fn main() {
                     primary_window: Some(Window {
                         title: "onsen-matrix".into(),
                         name: Some("onsen-matrix".into()),
-                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
-                        present_mode: PresentMode::AutoVsync,
+                        mode: if windowed { WindowMode::Windowed } else { WindowMode::BorderlessFullscreen(MonitorSelection::Current) },
+                        present_mode,
+                        desired_maximum_frame_latency: latency,
                         decorations: false,
                         ..default()
                     }),

@@ -9,10 +9,11 @@
 //! is GLYPH_SIZE of the screen tall. The camera starts at the origin and
 //! has a velocity like anything else.
 //!
-//! The rain falls in a box that moves with the camera: RAIN_WIDTH across,
-//! from RAIN_NEAR to RAIN_FAR ahead, born RAIN_TOP above and gone below
-//! RAIN_BOTTOM or once behind the camera. There are always DROPLETS of
-//! them; when one goes, another is born somewhere in the box.
+//! The rain falls in the camera's view: from RAIN_NEAR to RAIN_FAR ahead,
+//! and at each depth as wide as the view is there (RAIN_SPREAD of its
+//! width), born just above the top of the view at that depth and gone
+//! below its bottom, or once behind the camera. There are always DROPLETS
+//! of them; when one goes, another is born somewhere in the view.
 //!
 //! Every tunable is a named constant below.
 
@@ -27,12 +28,12 @@ const WALK: f32 = 0.2;           // units per second forward
 const RISE: f32 = 0.0;           // units per second upward
 
 // -------------------------------------------------------------------- rain
-const DROPLETS: usize = 150;     // how many droplets are falling at once
-const RAIN_WIDTH: f32 = 6.0;     // units, centred on the camera
+const DROPLETS: usize = 195;     // how many droplets are falling at once
 const RAIN_NEAR: f32 = 0.3;      // units ahead of the camera
-const RAIN_FAR: f32 = 6.0;
-const RAIN_TOP: f32 = 2.0;       // units above the camera
-const RAIN_BOTTOM: f32 = -2.0;
+const RAIN_FAR: f32 = 14.0;      // the furthest, and smallest
+const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
+const RAIN_MARGIN: f32 = 0.3;    // units above the view a droplet is born, and below it that it dies
+const ASPECT: f32 = 16.0 / 9.0;  // the view's width over its height
 
 // ----------------------------------------------------------------- droplet
 const FALL: f32 = 0.28125;       // units per second downward
@@ -148,8 +149,13 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMut<Rng>, camera: Single<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
     let cam = camera.translation;
     for _ in live.iter().count()..DROPLETS {
-        let x = cam.x + rng.range(-0.5 * RAIN_WIDTH, 0.5 * RAIN_WIDTH);
-        let z = cam.z - rng.range(RAIN_NEAR, RAIN_FAR);
+        let ahead = rng.range(RAIN_NEAR, RAIN_FAR);
+        // The view at that depth: `ahead` units tall, ASPECT times as wide.
+        let half_w = 0.5 * ahead * ASPECT * RAIN_SPREAD;
+        let half_h = 0.5 * ahead;
+        let x = cam.x + rng.range(-half_w, half_w);
+        let z = cam.z - ahead;
+        let (top, bottom) = (cam.y + half_h + RAIN_MARGIN, cam.y - half_h - RAIN_MARGIN);
         let start = (rng.next() * look.text.len() as f32) as usize;
         let head = commands
             .spawn((
@@ -161,8 +167,8 @@ fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMu
             .id();
         commands
             .spawn((
-                Droplet { born: time.elapsed_secs(), start, stamped: 0, bottom: cam.y + RAIN_BOTTOM, head },
-                Transform::from_xyz(x, cam.y + RAIN_TOP, z),
+                Droplet { born: time.elapsed_secs(), start, stamped: 0, bottom, head },
+                Transform::from_xyz(x, top, z),
                 Visibility::default(),
                 Velocity(Vec3::new(0.0, -FALL, 0.0)),
             ))

@@ -59,11 +59,11 @@ set so that one unit, one unit ahead, spans the screen's height. The
 camera starts at the origin and has a velocity: forward at `WALK`, up at
 `RISE`.
 
-**The rain** keeps `DROPLETS` droplets falling in a box that moves with the
-camera: `RAIN_WIDTH` across, from `RAIN_NEAR` to `RAIN_FAR` ahead, born
-`RAIN_TOP` above and gone below `RAIN_BOTTOM` or once behind the camera.
-When one goes, another is born somewhere in the box, reading from a random
-place in the text.
+**The rain** keeps `DROPLETS` droplets falling in the camera's view: from
+`RAIN_NEAR` to `RAIN_FAR` ahead, and at each depth as wide as the view is
+there, born just above the top of the view at that depth and gone below
+its bottom, or once behind the camera. When one goes, another is born
+somewhere in the view, reading from a random place in the text.
 
 **The Droplet** is a point with a velocity, `FALL` units per second down,
 reading the text, carrying its head as a child: a glyph at `HEAD`
@@ -87,10 +87,12 @@ hide what is behind it; the camera adds Bevy's bloom on top.
 
 ## Known
 
-- The window runs at 60 fps on a 120 Hz display with the GPU mostly idle.
-  A layer-shell surface on the same display gets 120, so the cap is in the
-  window path (winit or Hyprland's handling of the fullscreen window), not
-  in the scene. Being chased.
+- Hyprland gives a window on an unfocused monitor 60 fps; the same window
+  gets 120 while its monitor is focused. The dev loop hands focus back to
+  your monitor, so it always shows 60. In use the screensaver's windows
+  hold focus. Accepted. `ONSEN_MATRIX_PRESENT=novsync|immediate|mailbox`,
+  `ONSEN_MATRIX_LATENCY=N` and `ONSEN_MATRIX_WINDOWED=1` exist for pacing
+  experiments.
 
 ## Before Bevy
 
