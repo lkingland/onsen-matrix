@@ -4,14 +4,11 @@
 // The Droplet: the system's one element. A glyph that, every TICK seconds,
 // becomes a different random character.
 const CYCLE: bool = false;       // false holds STILL_CHAR; true cycles every TICK
-const STILL_CHAR: u32 = 0u;      // 方, the first character of 方便品第二 (妙 is 159)
+const STILL_CHAR: u32 = 0u;      // 方, the first character of 方便品第二
 const TICK: f32 = 0.75;          // seconds between character changes
-// The pool. The atlas puts the characters of chapters 2 and 16 (Hōben and
-// Juryō) first, GONGYO_CHARS of them, then the rest of the sutra, SUTRA_CHARS in all.
-const GONGYO_CHARS: u32 = 744u;
-const SUTRA_CHARS: u32 = 1843u;
+// The pool: every character of chapters 2 and 16 (Hōben and Juryō), in the atlas.
 const FIRST_CHAR: u32 = 0u;
-const CHAR_COUNT: u32 = GONGYO_CHARS;
+const CHAR_COUNT: u32 = 744u;
 
 // A random number in 0..1 for an integer, stable from frame to frame.
 fn hash(n: u32) -> f32 {
@@ -38,7 +35,7 @@ struct Uniforms {
 @group(0) @binding(2) var atlas_sampler: sampler;
 
 const ATLAS_COLS: f32 = 64.0;
-const ATLAS_ROWS: f32 = 29.0;
+const ATLAS_ROWS: f32 = 12.0;
 
 // The signed distance field of character `code` at `uv` (0..1 across its
 // cell, y down): 0.5 at the edge, above inside, below outside.

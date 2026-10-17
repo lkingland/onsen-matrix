@@ -24,11 +24,9 @@ draws every output pixel).
 
 ## The characters
 
-`assets/lotus-sutra.txt` is the running text of the Lotus Sutra in
-Kumārajīva's Chinese (妙法蓮華經, Taishō 262), taken from the CBETA edition's
-TEI XML with headings, notes and variant readings stripped, starting at
-如是我聞. `assets/lotus-gongyo.txt` is chapters 2 and 16 of it, Hōben and
-Juryō, the chapters recited in Nichiren Shoshu gongyō. The atlas numbers the
-gongyō's characters first, in order of first appearance, then the rest of the
-sutra, so the shader's pool of the first `GONGYO_CHARS` is the liturgy. To
-use another text, replace either file and rebuild.
+`assets/lotus-gongyo.txt` is chapters 2 and 16 of the Lotus Sutra in
+Kumārajīva's Chinese (妙法蓮華經, Taishō 262): Hōben and Juryō, the chapters
+recited in Nichiren Shoshu gongyō. It was taken from the CBETA edition's TEI
+XML with notes and variant readings stripped. The atlas numbers its
+characters in order of first appearance. To use another text, replace the
+file and rebuild.

@@ -1,11 +1,10 @@
 //! The glyph atlas: one texture holding every character the shader may draw,
 //! in a grid of equal cells, so a shader can show character `n` by sampling
 //! cell `n`. The characters are those of the Lotus Sutra (Kumārajīva's
-//! 妙法蓮華經, Taishō 262, from the CBETA text). Those of chapters 2 and 16,
-//! the Hōben and Juryō chapters recited in Nichiren Shoshu gongyō
-//! (`assets/lotus-gongyo.txt`), come first in order of first appearance,
-//! then the rest of the sutra (`assets/lotus-sutra.txt`), so a pool of the
-//! first N characters is the gongyō's and the text can be streamed by index.
+//! 妙法蓮華經, Taishō 262, from the CBETA text), chapters 2 and 16: the Hōben
+//! and Juryō chapters recited in Nichiren Shoshu gongyō
+//! (`assets/lotus-gongyo.txt`), numbered in order of first appearance, so
+//! the text can be streamed by index.
 //!
 //! Each cell holds a signed distance field, not a picture: a texel's value
 //! is its distance to the glyph's edge, inside positive, scaled so 0.5 is
@@ -22,13 +21,12 @@ pub const CELL: u32 = 128;
 pub const SPREAD: f32 = 20.0;
 
 const FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
-const TEXT: &str = include_str!("../assets/lotus-sutra.txt");
-const GONGYO: &str = include_str!("../assets/lotus-gongyo.txt");
+const TEXT: &str = include_str!("../assets/lotus-gongyo.txt");
 
 /// The characters, in order of first appearance.
 pub fn charset() -> Vec<char> {
     let mut seen = std::collections::HashSet::new();
-    GONGYO.chars().chain(TEXT.chars()).filter(|c| seen.insert(*c)).collect()
+    TEXT.chars().filter(|c| seen.insert(*c)).collect()
 }
 
 /// Builds the atlas and uploads it as an R8 texture. Returns the view and
@@ -70,8 +68,7 @@ pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView,
             }
         }
     }
-    let gongyo = { let mut seen = std::collections::HashSet::new(); GONGYO.chars().filter(|c| seen.insert(*c)).count() };
-    log::info!("atlas: {} characters ({gongyo} of chapters 2 and 16 first), {w}x{h}, built in {:.2}s", chars.len(), started.elapsed().as_secs_f32());
+    log::info!("atlas: {} characters, {w}x{h}, built in {:.2}s", chars.len(), started.elapsed().as_secs_f32());
     // ONSEN_MATRIX_ATLAS=path writes the atlas as a PGM, to look at it.
     if let Ok(path) = std::env::var("ONSEN_MATRIX_ATLAS") {
         let mut out = format!("P5\n{w} {h}\n255\n").into_bytes();
