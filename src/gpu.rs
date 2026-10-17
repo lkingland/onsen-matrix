@@ -13,7 +13,9 @@ use crate::atlas;
 pub struct Uniforms {
     pub resolution: [f32; 2],
     pub time: f32,
-    pub _pad: f32,
+    /// When the shader was last loaded, on the same clock as `time`, so a
+    /// picture can start over on every save.
+    pub loaded: f32,
 }
 
 /// The shader file, watched for changes.
@@ -43,6 +45,8 @@ pub struct Gpu {
     /// pipeline targets it.
     pub format: Option<wgpu::TextureFormat>,
     shader: Shader,
+    /// When the pipeline was last rebuilt.
+    pub loaded_at: Instant,
 }
 
 /// A screen's GPU-side state: its uniform buffer and the bind group tying
@@ -111,7 +115,7 @@ impl Gpu {
             mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
-        Gpu { adapter, device, queue, layout, atlas_view, sampler, text, pipeline: None, format: None, shader }
+        Gpu { adapter, device, queue, layout, atlas_view, sampler, text, pipeline: None, format: None, shader, loaded_at: Instant::now() }
     }
 
     pub fn target(&self, label: &str) -> Target {
@@ -158,6 +162,7 @@ impl Gpu {
         match self.build_pipeline(&source, format) {
             Ok(p) => {
                 self.pipeline = Some(p);
+                self.loaded_at = Instant::now();
                 log::info!("shader loaded: {}", self.shader.path.display());
             }
             Err(e) => log::error!("shader not loaded:\n{e}"),

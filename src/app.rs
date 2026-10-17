@@ -180,7 +180,11 @@ impl App {
         // A snapshot request names the file to write the frame to.
         let request = self.args.snap.as_ref().filter(|p| p.exists());
         let snapshot = request.and_then(|p| std::fs::read_to_string(p).ok()).map(|s| std::path::PathBuf::from(s.trim()));
-        let uniforms = Uniforms { resolution: [frame.texture.width() as f32, frame.texture.height() as f32], time: self.started.elapsed().as_secs_f32(), _pad: 0.0 };
+        let uniforms = Uniforms {
+            resolution: [frame.texture.width() as f32, frame.texture.height() as f32],
+            time: self.started.elapsed().as_secs_f32(),
+            loaded: gpu.loaded_at.duration_since(self.started).as_secs_f32(),
+        };
         gpu.draw(&frame, &screen.target, uniforms, snapshot.as_deref());
         if let Some(p) = request {
             let _ = std::fs::remove_file(p);

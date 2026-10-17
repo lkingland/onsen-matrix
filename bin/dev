@@ -16,7 +16,7 @@ case ${1:-} in
     rm -f "$ppm"; echo "$ppm" > "$root/target/snap.request"
     for _ in $(seq 50); do [[ -f $ppm ]] && break; sleep 0.05; done
     [[ -f $ppm ]] || { echo "no snapshot: is the host running?" >&2; exit 1; }
-    magick "$ppm" "$out" && rm -f "$ppm" && echo "$out" ;;
+    magick "$ppm" "$out" && rm -f "$ppm" && echo "$out"; exit 0 ;;
 esac
 cd "$root" && cargo build --release 2>&1 | grep -E "^(error|warning)|-->|Finished" || true
 pkill -x onsen-matrix || true; sleep 0.2

@@ -9,7 +9,7 @@
 struct Uniforms {
   resolution: vec2<f32>,   // the drawn buffer, in pixels
   time: f32,               // seconds since the start
-  _pad: f32,
+  loaded: f32,             // when this shader was loaded, on the same clock
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var atlas: texture_2d<f32>;
@@ -71,6 +71,7 @@ struct Glyph {
 
 const LIFE: f32 = 4.0;           // seconds from painted to gone
 const TICK: f32 = 0.75;          // seconds between characters
+const GLYPH_SIZE: f32 = 0.0625;  // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
@@ -101,6 +102,53 @@ fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let uv = vec2<f32>(rel.x + 0.5, 0.5 - rel.y);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return vec3<f32>(0.0); }
   return tube(glyph_char(g, t), uv, size * u.resolution.y, px, t) * glyph_opacity(g, t);
+}
+
+// ----------------------------------------------------------------- droplet
+//
+// The Droplet has no look of its own: it is a point that falls. Born at
+// `origin` at time `born`, it descends at FALL screen heights per second,
+// and every SPAWN seconds it paints a Glyph where it is, pinned there. The
+// k-th glyph reads the text from `start + k`, so a column reads downward.
+
+struct Droplet {
+  origin: vec3<f32>,   // where it was born, in space
+  born: f32,           // when
+  start: u32,          // its first glyph's place in the text
+};
+
+const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
+const SPAWN: f32 = 0.5;          // seconds between glyphs
+const MARK: bool = true;         // for testing: show the droplet itself as a dot
+const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
+
+fn droplet_pos(d: Droplet, t: f32) -> vec3<f32> {
+  return d.origin - vec3<f32>(0.0, FALL * max(t - d.born, 0.0), 0.0);
+}
+
+// The k-th glyph a droplet painted.
+fn droplet_glyph(d: Droplet, k: u32) -> Glyph {
+  let when = d.born + f32(k) * SPAWN;
+  return Glyph(droplet_pos(d, when), GLYPH_SIZE, when, d.start + k);
+}
+
+// The light of every glyph a droplet has painted that is still alive: only
+// the last LIFE / SPAWN of them can be.
+fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+  let age = t - d.born;
+  if (age < 0.0) { return vec3<f32>(0.0); }
+  let last = u32(floor(age / SPAWN));
+  let first = u32(max(ceil((age - LIFE) / SPAWN), 0.0));
+  var col = vec3<f32>(0.0);
+  for (var k = first; k <= last; k++) {
+    col += paint(droplet_glyph(d, k), p, px, t);
+  }
+  if (MARK) {
+    let pr = project(droplet_pos(d, t));
+    let dist_px = length(p - pr.centre) * u.resolution.y;
+    col += vec3<f32>(1.0, 0.3, 0.3) * smoothstep(MARK_PX * 0.5 + 0.7, MARK_PX * 0.5 - 0.7, dist_px);
+  }
+  return min(col, vec3<f32>(1.0));
 }
 
 // ------------------------------------------------------------------- atlas
@@ -201,10 +249,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space: the origin in the middle, one unit = screen height, y up.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y * vec2<f32>(1.0, -1.0);
   let px = in.uv * u.resolution;
-  // The demonstration: a glyph is painted at the origin, as near as anything
-  // can be, every LIFE seconds; each picks up the text where the last left off.
-  let n = floor(u.time / LIFE);
-  let g = Glyph(vec3<f32>(0.0, 0.0, 0.0), 0.0625, n * LIFE, u32(n * floor(LIFE / TICK)));
-  let col = paint(g, p, px, u.time);
+  // One droplet, born at the top of the screen in the middle, as near as
+  // anything can be, the moment this shader was loaded.
+  let d = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded, 0u);
+  let col = droplet_paint(d, p, px, u.time);
   return vec4<f32>(col, 1.0);
 }
