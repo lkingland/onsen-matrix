@@ -3,7 +3,7 @@
 
 // The Droplet: the system's one element. A glyph that, every TICK seconds,
 // becomes a different random character.
-const TICK: f32 = 0.5;           // seconds between character changes
+const TICK: f32 = 0.75;          // seconds between character changes
 const FIRST_CHAR: u32 = 33u;     // the pool: printable ASCII, '!' through '~'
 const CHAR_COUNT: u32 = 94u;
 
