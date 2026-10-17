@@ -145,7 +145,7 @@ struct Droplet {
   start: u32,          // where in the text it begins reading
 };
 
-const FALL: f32 = 0.1875;        // screen heights per second: 5.3 seconds top to bottom
+const FALL: f32 = 0.28125;       // screen heights per second: 3.6 seconds top to bottom
 const SPAWN: f32 = 0.25;         // seconds between glyphs
 const HEAD: f32 = 1.3;           // the head's brightness, over the full brightness of a fresh glyph
 const HEAD_SIZE: f32 = 1.25;     // the head's size, relative to a stamped glyph
