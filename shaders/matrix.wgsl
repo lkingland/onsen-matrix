@@ -146,7 +146,7 @@ struct Droplet {
 };
 
 const FALL: f32 = 0.28125;       // screen heights per second: 3.6 seconds top to bottom
-const SPAWN: f32 = 0.25;         // seconds between glyphs
+const SPAWN: f32 = 0.125;        // seconds between glyphs
 const HEAD: f32 = 1.3;           // the head's brightness, over the full brightness of a fresh glyph
 const HEAD_SIZE: f32 = 1.25;     // the head's size, relative to a stamped glyph
 const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward white
