@@ -16,7 +16,7 @@ pub const COLS: u32 = 16;
 pub const ROWS: u32 = 8;
 pub const CELL: u32 = 256;
 /// Pixels of the cell that the distance range covers on either side of the edge.
-pub const SPREAD: f32 = 24.0;
+pub const SPREAD: f32 = 40.0;
 
 const FONT: &str = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf";
 

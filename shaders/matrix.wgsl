@@ -112,7 +112,7 @@ const SMEAR: f32 = 0.045;        // downward glow smear, in cell units
 const SMEAR_GAIN: f32 = 0.9;     // the smear's brightness relative to the body
 const EDGE_BLUR: f32 = 0.13;     // edge softness, in SDF units
 const SCATTER: f32 = 0.8;        // halo strength
-const SCATTER_REACH: f32 = 0.45; // halo reach, in SDF units
+const SCATTER_REACH: f32 = 0.3;  // halo reach, in SDF units
 
 fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let inside = fade(uv);
@@ -120,7 +120,9 @@ fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   // The smear: the glyph's light also falls a little below itself.
   let smear = max(d, SMEAR_GAIN * glyph_sdf(code, uv - vec2<f32>(0.0, SMEAR)));
   let body = smoothstep(0.5 - EDGE_BLUR, 0.5 + EDGE_BLUR, smear);
-  let halo = SCATTER * exp(-max(0.5 - smear, 0.0) / SCATTER_REACH * 3.0) * (1.0 - body);
+  // The halo reaches zero where the distance field bottoms out, so nothing
+  // spills past the glow into the cell.
+  let halo = SCATTER * exp(-max(0.5 - smear, 0.0) / SCATTER_REACH * 3.0) * (1.0 - body) * smoothstep(0.0, 0.2, smear);
   // The grille.
   let sub = u32(floor(px.x / GRILLE_PITCH)) % 3u;
   var mask = vec3<f32>(GRILLE_FLOOR);
