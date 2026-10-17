@@ -116,7 +116,7 @@ struct Droplet {
   start: u32,          // where in the text it begins reading
 };
 
-const FALL: f32 = 0.0625;        // screen heights per second: 16 seconds top to bottom
+const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
 const SPAWN: f32 = 1.0;          // seconds between glyphs
 const MARK: bool = true;         // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
