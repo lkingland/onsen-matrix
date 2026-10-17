@@ -29,4 +29,6 @@ Kumārajīva's Chinese (妙法蓮華經, Taishō 262): Hōben and Juryō, the ch
 recited in Nichiren Shoshu gongyō. It was taken from the CBETA edition's TEI
 XML with notes and variant readings stripped. The atlas numbers its
 characters in order of first appearance. To use another text, replace the
-file and rebuild.
+file and rebuild. `assets/lotus-sutra.txt` is the whole sutra, prepared the
+same way from 如是我聞 on, kept for a later background layer; it is not in
+the atlas yet.
