@@ -95,7 +95,7 @@ fn droplet(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let rel = (p - pr.centre) / size;
   let uv = vec2<f32>(rel.x + 0.5, 0.5 - rel.y);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return vec3<f32>(0.0); }
-  return tube(droplet_char(d, t), uv, px, t);
+  return tube(droplet_char(d, t), uv, size * u.resolution.y, px, t);
 }
 
 // ------------------------------------------------------------------- atlas
@@ -106,17 +106,22 @@ fn droplet(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
 
 const ATLAS_COLS: u32 = 64u;
 const ATLAS_ROWS: u32 = 12u;
+const ATLAS_CELL: f32 = 128.0;   // pixels per cell
+const ATLAS_SPREAD: f32 = 20.0;  // pixels of the cell per 0.5 of SDF
 
 fn glyph_sdf(code: u32, uv: vec2<f32>) -> f32 {
   let cell = vec2<f32>(f32(code % ATLAS_COLS), f32(code / ATLAS_COLS));
-  let cuv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
+  // Stay half a texel inside the cell, so filtering never reaches the neighbours.
+  let inset = 0.5 / ATLAS_CELL;
+  let cuv = clamp(uv, vec2<f32>(inset), vec2<f32>(1.0 - inset));
   return textureSample(atlas, atlas_sampler, (cell + cuv) / vec2<f32>(f32(ATLAS_COLS), f32(ATLAS_ROWS))).r;
 }
 
-// Crisp coverage, antialiased for the screen.
-fn glyph(code: u32, uv: vec2<f32>) -> f32 {
+// Crisp coverage, antialiased over one screen pixel: `cell_px` is the
+// cell's size on screen in pixels, from which the SDF's slope per pixel follows.
+fn glyph(code: u32, uv: vec2<f32>, cell_px: f32) -> f32 {
   let d = glyph_sdf(code, uv);
-  let aa = 0.7 * fwidth(d);
+  let aa = 0.7 * (ATLAS_CELL / cell_px) / (2.0 * ATLAS_SPREAD);
   return smoothstep(0.5 - aa, 0.5 + aa, d);
 }
 
@@ -175,11 +180,12 @@ fn glow(code: u32, uv: vec2<f32>) -> f32 {
   return (body + halo) * fade(uv);
 }
 
-// The character `code` as seen on the tube, over its cell uv, at pixel px.
-fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+// The character `code` as seen on the tube, over its cell uv (cell_px pixels
+// on screen), at pixel px.
+fn tube(code: u32, uv: vec2<f32>, cell_px: f32, px: vec2<f32>, t: f32) -> vec3<f32> {
   let breathe = 1.0 - BREATHE + BREATHE * sin(t * 9.0) * sin(t * 2.3);
   let back = BACK * INK * glow(code, uv) * grille(px) * breathe;
-  let front = CORE * INK * glyph(code, uv) * mix(vec3<f32>(1.0), grille(px), CORE_GRILLE);
+  let front = CORE * INK * glyph(code, uv, cell_px) * mix(vec3<f32>(1.0), grille(px), CORE_GRILLE);
   return min((back + front) * scanlines(px, t), vec3<f32>(1.0));
 }
 
