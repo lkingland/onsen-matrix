@@ -93,6 +93,9 @@ struct App {
     /// --hold: never end on input, and take no keyboard, so the other
     /// screens stay usable while this one holds the picture for iteration.
     hold: bool,
+    /// --height N: the number of lines drawn per output; the output scales
+    /// the picture to fill itself. 0 means the output's own height.
+    height: u32,
     started: Instant,
     screens: HashMap<u32, Screen>, // keyed by the wl_surface's protocol id
     keyboard: Option<wl_keyboard::WlKeyboard>,
@@ -109,6 +112,7 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("onsen_matrix=info")).init();
     let only = arg("--output");
     let hold = std::env::args().any(|a| a == "--hold");
+    let height: u32 = arg("--height").and_then(|h| h.parse().ok()).unwrap_or(1440);
     let shader_path = arg("--shader")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders/matrix.wgsl"));
@@ -134,6 +138,7 @@ fn main() {
         shader: Shader { path: shader_path, loaded: None, checked: Instant::now() },
         only,
         hold,
+        height,
         started: Instant::now(),
         screens: HashMap::new(),
         keyboard: None,
@@ -352,7 +357,46 @@ impl App {
                 pass.draw(0..6, 0..1);
             }
         }
+        // A snapshot request: `<request>` names the file to write; the frame is
+        // read back and written there as a PPM, then the request is removed.
+        let snap = std::env::var("ONSEN_MATRIX_SNAP").ok().map(PathBuf::from).filter(|p| p.exists());
+        let readback = snap.as_ref().map(|_| {
+            let bpr = (config.width * 4 + 255) / 256 * 256;
+            let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("snapshot"),
+                size: (bpr * config.height) as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo { texture: &frame.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                wgpu::TexelCopyBufferInfo { buffer: &buffer, layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(bpr), rows_per_image: Some(config.height) } },
+                wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+            );
+            (buffer, bpr)
+        });
         gpu.queue.submit([encoder.finish()]);
+        if let (Some(request), Some((buffer, bpr))) = (snap, readback) {
+            let target = std::fs::read_to_string(&request).unwrap_or_default().trim().to_string();
+            let (w, h) = (config.width, config.height);
+            let slice = buffer.slice(..);
+            slice.map_async(wgpu::MapMode::Read, |_| {});
+            let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+            let data = slice.get_mapped_range().expect("the mapped snapshot");
+            let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
+            for y in 0..h {
+                let row = &data[(y * bpr) as usize..(y * bpr + w * 4) as usize];
+                for px in row.chunks(4) {
+                    out.extend_from_slice(&[px[2], px[1], px[0]]); // BGRA to RGB
+                }
+            }
+            drop(data);
+            match std::fs::write(&target, out) {
+                Ok(()) => log::info!("snapshot: {target}"),
+                Err(e) => log::error!("snapshot {target}: {e}"),
+            }
+            let _ = std::fs::remove_file(&request);
+        }
         // Ask for the next frame before presenting, so the compositor paces us.
         screen.layer.wl_surface().frame(qh, FrameCallbackData(screen.layer.wl_surface().clone()));
         gpu.queue.present(frame);
@@ -388,11 +432,13 @@ impl LayerShellHandler for App {
         let (w, h) = (w.max(1), h.max(1));
         let Some(gpu) = self.gpu.as_mut() else { return };
         if let Some(screen) = self.screens.get_mut(&id) {
-            // Draw at the output's physical size when known, shown at the logical size.
-            let (bw, bh) = if screen.physical.0 > 0 { screen.physical } else { (w, h) };
+            // Draw at the chosen size, shown at the surface's logical size.
+            let (pw, ph) = if screen.physical.0 > 0 { screen.physical } else { (w, h) };
+            let (bw, bh) = if self.height > 0 && self.height < ph { ((pw * self.height + ph / 2) / ph, self.height) } else { (pw, ph) };
             screen.viewport.set_destination(w as i32, h as i32);
             let mut config = screen.surface.get_default_config(&gpu.adapter, bw, bh).expect("a surface configuration");
             config.present_mode = wgpu::PresentMode::Fifo;
+            config.usage |= wgpu::TextureUsages::COPY_SRC; // for snapshots
             screen.surface.configure(&gpu.device, &config);
             if gpu.format.is_none() {
                 gpu.format = Some(config.format);

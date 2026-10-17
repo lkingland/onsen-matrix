@@ -5,8 +5,21 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 monitor=${ONSEN_MATRIX_MONITOR:-HDMI-A-1}
-if [[ ${1:-} == stop ]]; then pkill -x onsen-matrix || true; exit 0; fi
+height=${ONSEN_MATRIX_HEIGHT:-1440}
+case ${1:-} in
+  stop) pkill -x onsen-matrix || true; exit 0 ;;
+  snap)
+    # Asks the running host for the current frame, written as PNG to $2
+    # (default target/snap.png). This is the host's own frame, not a screen
+    # capture, so it shows exactly what was drawn.
+    out=${2:-$root/target/snap.png}; ppm=$root/target/snap.ppm
+    rm -f "$ppm"; echo "$ppm" > "$root/target/snap.request"
+    for _ in $(seq 50); do [[ -f $ppm ]] && break; sleep 0.05; done
+    [[ -f $ppm ]] || { echo "no snapshot: is the host running?" >&2; exit 1; }
+    magick "$ppm" "$out" && rm -f "$ppm" && echo "$out" ;;
+esac
 cd "$root" && cargo build --release 2>&1 | grep -E "^(error|warning)|-->|Finished" || true
 pkill -x onsen-matrix || true; sleep 0.2
-setsid -f bash -c "exec '$root/target/release/onsen-matrix' --output '$monitor' --hold >> '$root/target/dev.log' 2>&1"
+rm -f "$root/target/snap.request"
+setsid -f bash -c "ONSEN_MATRIX_SNAP='$root/target/snap.request' exec '$root/target/release/onsen-matrix' --output '$monitor' --height '$height' --hold >> '$root/target/dev.log' 2>&1"
 echo "holding $monitor; log: target/dev.log; stop with: bin/dev stop"

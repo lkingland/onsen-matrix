@@ -17,4 +17,7 @@ While it holds, input does not end it and it takes no keyboard, so the other
 screens work as usual. Edit `shaders/matrix.wgsl` and save: the next frame
 uses it. Shader errors go to `target/dev.log` and the previous picture stays.
 Rust changes need `bin/dev` again. `ONSEN_MATRIX_MONITOR=DP-2 bin/dev` picks
-another output.
+another output; `ONSEN_MATRIX_HEIGHT=2160 bin/dev` draws at another size (the
+default is 1440 lines per output, scaled up by the compositor; `--height 0`
+draws every output pixel).
+    bin/dev snap       write the current frame to target/snap.png (the host's own frame, not a screen capture)
