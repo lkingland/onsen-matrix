@@ -70,12 +70,20 @@ struct Glyph {
 };
 
 const LIFE: f32 = 2.6667;        // seconds from painted to gone
+const FLASH: f32 = 0.12;         // seconds the fresh print stays fully bright
+const AFTER: f32 = 0.5;          // the brightness it drops to after the flash, then fades from
 const TICK: f32 = 0.75;          // seconds between characters as it fades
 const GLYPH_SIZE: f32 = 0.0625;  // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
-fn glyph_opacity(g: Glyph, t: f32) -> f32 { return clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
+// Fully bright for FLASH, then straight down to AFTER, then slowly to nothing
+// at LIFE: the fresh print is the bright one, the rest its trail.
+fn glyph_opacity(g: Glyph, t: f32) -> f32 {
+  let age = glyph_age(g, t);
+  let trail = AFTER * clamp(1.0 - (age - FLASH) / (LIFE - FLASH), 0.0, 1.0);
+  return mix(1.0, trail, smoothstep(FLASH, FLASH + 0.05, age));
+}
 
 // The character a glyph shows at time t: the text, read on from its start.
 fn glyph_char(g: Glyph, t: f32) -> u32 {
