@@ -10,6 +10,7 @@ bevy = { version = "0.20", default-features = false, features = [
   "bevy_post_process", "tonemapping_luts", "ktx2", "zstd_rust", "std", "async_executor", "png",
   "bevy_sprite", "bevy_sprite_render",
 ] }
+bytemuck = { version = "1.25", features = ["derive"] }
 fontdue = "0.9.4"
 log = "0.4"
 

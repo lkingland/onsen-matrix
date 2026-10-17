@@ -31,6 +31,8 @@ pub struct Args {
     pub present_mode: PresentMode,
     pub latency: Option<std::num::NonZero<u32>>,
     pub windowed: bool,
+    /// `--fps N`: hold the frame rate at N, trading frames for density; 0 means the display's rate.
+    pub fps: u32,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
@@ -54,6 +56,7 @@ fn main() {
         present_mode,
         latency,
         windowed,
+        fps: value("--fps").and_then(|v| v.parse().ok()).unwrap_or(0),
         snap: env("ONSEN_MATRIX_SNAP").map(Into::into),
     };
     App::new()

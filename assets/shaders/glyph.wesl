@@ -1,9 +1,9 @@
 // How a glyph looks. Edit and save: Bevy reloads this file.
 //
-// A glyph is a quad, 1 + 2 * AURA_REACH cells wide, with the character's
-// cell in the middle. Every glyph shares one material, so they are all
-// drawn as instances; which character, how bright and how white comes
-// from the instance's tag, packed as src/look.rs packs it.
+// Every glyph is a record in one buffer and a quad in one mesh, 1 + 2 *
+// AURA_REACH cells wide with the character's cell in the middle. The
+// vertex shader places each quad from its record and the clock; the
+// fragment shader draws the look.
 // Three layers: the aura, a wide tinted repeat of the character's shape
 // beyond its cell; the tube's glow, the character's light scattered and
 // smeared downward; and the tube's core, the character sharp. The glow and
@@ -12,20 +12,41 @@
 
 import bevy_pbr::render::{
     mesh_view_bindings::globals,
-    mesh_functions,
     view_transformations::position_world_to_clip,
+};
+
+// One glyph; matches GlyphRecord in src/look.rs.
+struct Glyph {
+  pos: vec3<f32>,
+  born: f32,
+  start: u32,
+  bright: f32,
+  white: f32,
+  kind: u32,     // 0 empty, 1 trail, 2 head
+};
+
+// What drawing needs; matches Params in src/look.rs.
+struct Params {
+  now: f32,
+  life: f32,
+  tick: f32,
+  glyph_size: f32,
+  head_size: f32,
+  decay: f32,
+  floor: f32,
+  _pad: f32,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var atlas: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(1) var atlas_sampler: sampler;
-
-const BRIGHT_MAX: f32 = 2.0;     // brightness is 8 bits over 0..BRIGHT_MAX; matches src/look.rs
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var<storage, read> glyphs: array<Glyph>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var<storage, read> text: array<u32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(4) var<uniform> params: Params;
 
 struct Vertex {
-  @builtin(instance_index) instance_index: u32,
-  @location(0) position: vec3<f32>,
+  @location(0) position: vec3<f32>,   // (record index, corner, 0)
   @location(1) normal: vec3<f32>,
-  @location(2) uv: vec2<f32>,
+  @location(2) uv: vec2<f32>,         // the corner's, 0..1 with y down
 };
 
 struct VertexOutput {
@@ -36,17 +57,40 @@ struct VertexOutput {
   @location(3) @interpolate(flat) white: f32,
 };
 
+// A trail glyph's brightness at `age`: exponential decay down to a floor,
+// and a linear term that takes it exactly to nothing at the end of its life.
+fn fade(bright: f32, age: f32) -> f32 {
+  let a = clamp(age / params.life, 0.0, 1.0);
+  return bright * max(exp(-params.decay * a), params.floor) * (1.0 - a);
+}
+
+// Each quad finds its record and places itself in the world from it, or
+// puts itself outside the view if there is nothing to draw.
 @vertex
 fn vertex(v: Vertex) -> VertexOutput {
-  let tag = mesh_functions::get_tag(v.instance_index);
-  let world_from_local = mesh_functions::get_world_from_local(v.instance_index);
-  let world = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.position, 1.0));
   var out: VertexOutput;
-  out.position = position_world_to_clip(world.xyz);
+  let g = glyphs[u32(v.position.x)];
+  let age = params.now - g.born;
+  let gone = g.kind == 0u || (g.kind == 1u && age >= params.life);
+  if (gone) {
+    out.position = vec4<f32>(2.0, 2.0, 2.0, 1.0);
+    return out;
+  }
+  var size = params.glyph_size;
+  if (g.kind == 2u) {
+    size *= params.head_size;
+    out.code = text[g.start % arrayLength(&text)];
+    out.bright = g.bright;
+  } else {
+    let step = u32(max(age, 0.0) / params.tick);
+    out.code = text[(g.start + step) % arrayLength(&text)];
+    out.bright = fade(g.bright, age);
+  }
+  out.white = g.white;
   out.uv = v.uv;
-  out.code = tag & 0x3ffu;
-  out.bright = f32((tag >> 10u) & 0xffu) / 255.0 * BRIGHT_MAX;
-  out.white = f32((tag >> 18u) & 0x3fu) / 63.0;
+  let quad = size * (1.0 + 2.0 * AURA_REACH);
+  let world = g.pos + vec3<f32>((v.uv.x - 0.5) * quad, (0.5 - v.uv.y) * quad, 0.0);
+  out.position = position_world_to_clip(world);
   return out;
 }
 

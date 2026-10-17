@@ -28,7 +28,8 @@ pub struct HostPlugin;
 impl Plugin for HostPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((FrameTimeDiagnosticsPlugin::default(), LogDiagnosticsPlugin::default()))
-            .add_systems(Update, (open_displays, end_on_input, snapshot));
+            .add_systems(Update, (open_displays, end_on_input, snapshot))
+            .add_systems(Last, pace);
     }
 }
 
@@ -102,6 +103,25 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
             layer,
         ));
         x += size.x;
+    }
+}
+
+/// Holds the frame rate at --fps by sleeping out the rest of each frame,
+/// when a rate is asked for. Vsync still applies on top.
+fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
+    if args.fps == 0 {
+        return;
+    }
+    let period = std::time::Duration::from_secs_f64(1.0 / args.fps as f64);
+    let now = std::time::Instant::now();
+    if let Some(prev) = *last {
+        let next = prev + period;
+        if next > now {
+            std::thread::sleep(next - now);
+        }
+        *last = Some(next.max(now - period));
+    } else {
+        *last = Some(now);
     }
 }
 
