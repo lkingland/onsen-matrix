@@ -73,7 +73,8 @@ struct Glyph {
 const LIFE: f32 = 10.0;          // seconds from painted to gone: longer than a run, so a trail spans the screen
 const TRAIL_MIN: f32 = 0.1;      // a painted glyph's brightness at birth is random, between these
 const TRAIL_MAX: f32 = 0.7;
-const DECAY: f32 = 3.0;          // e-folds of fading across a life: bright at first, quickly down to a long tail
+const DECAY: f32 = 6.0;          // e-folds of fading across a life: bright at first, quickly down to the floor
+const FLOOR: f32 = 0.08;         // the fraction of birth brightness the tail holds at, until LIFE ends it
 const TICK: f32 = 0.75;          // seconds between characters as it fades
 const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height at the near plane, in screen heights
 
@@ -92,11 +93,11 @@ fn glyph_bright(g: Glyph) -> f32 {
   return mix(TRAIL_MIN, TRAIL_MAX, hash(g.start * 7919u + u32(g.born * 997.0)));
 }
 
-// Exponential decay: most of the light goes early, the rest lingers, and a
-// linear term takes it exactly to nothing at LIFE.
+// Exponential decay down to a floor: most of the light goes early, the rest
+// holds as a tail, and a linear term takes it exactly to nothing at LIFE.
 fn glyph_opacity(g: Glyph, t: f32) -> f32 {
   let a = clamp(glyph_age(g, t) / LIFE, 0.0, 1.0);
-  return glyph_bright(g) * exp(-DECAY * a) * (1.0 - a);
+  return glyph_bright(g) * max(exp(-DECAY * a), FLOOR) * (1.0 - a);
 }
 
 // The character a glyph shows at time t: the text, read on from its start.
@@ -144,7 +145,7 @@ struct Droplet {
   start: u32,          // where in the text it begins reading
 };
 
-const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
+const FALL: f32 = 0.1875;        // screen heights per second: 5.3 seconds top to bottom
 const SPAWN: f32 = 0.25;         // seconds between glyphs
 const HEAD: f32 = 1.3;           // the head's brightness, over the full brightness of a fresh glyph
 const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward white
