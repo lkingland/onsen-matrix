@@ -57,12 +57,14 @@ space; the Glyph; the Droplet; the frame; then how a glyph is drawn: the
 atlas, the tube look, the aura. Every tunable is a named constant at the
 top of its section.
 
-**Space** is measured in screen heights at the near plane, the glass of the
-screen, z = 0: a thing at (x, y, 0) of size s appears s screen heights tall.
-The camera is a pinhole `CAMERA_DEPTH` behind the glass looking straight in,
-so a thing at depth z appears `1 / (1 + z)` as large and moves across the
-screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
-`1 + z` heights tall. Nothing is nearer than z = 0.
+**Space** is still; the camera moves through it. Space is measured in
+screen heights: a thing one unit in front of the glass, of size s, appears
+s screen heights tall. The camera is a pinhole `CAMERA_DEPTH` behind the
+glass looking straight in, so a thing z beyond the glass appears
+`1 / (1 + z)` as large and moves across the screen `1 / (1 + z)` as fast,
+and the window the screen shows at depth z is `1 + z` heights tall.
+Whatever is behind the glass is not drawn. The camera starts at the origin
+when the shader loads and walks forward at `WALK` units per second.
 
 **The Glyph** is the one visible element: a character painted at a point
 in space at a moment, at a brightness of its own between `TRAIL_MIN` and
@@ -83,9 +85,10 @@ light scattered and smeared downward; and the tube's core, the character
 sharp. The glow and core sit under an aperture grille of red, green and
 blue stripes and slowly rolling scanlines, the light breathing a little.
 
-**The frame** is a list of columns, `COLUMNS`, each a place where droplets
-fall one after another from the moment the shader was loaded, reading on in
-the text. There are two: one at the glass, one two units in.
+**The frame** is a list of columns, `COLUMNS`, each a place fixed in space
+where droplets fall one after another from the moment the shader was
+loaded, reading on in the text. There is one, two units ahead of where the
+camera starts; the camera walks toward it, and past it.
 
 ## Next: the third dimension
 

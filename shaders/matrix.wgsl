@@ -45,25 +45,36 @@ fn hash(n: u32) -> f32 {
 
 // ---------------------------------------------------------- camera and space
 //
-// Space is in screen heights at the near plane, the glass of the screen: a
-// thing at (x, y, 0) of size s appears s screen heights tall, s heights
-// right of centre at x = s, y up. The camera is a pinhole CAMERA_DEPTH
-// behind the glass looking along +z, so a thing at depth z is scaled by
-// CAMERA_DEPTH / (CAMERA_DEPTH + z): half size at z = CAMERA_DEPTH, a
-// quarter at three times that. It moves across the screen slower by the
-// same factor, and the window the screen shows at depth z is (CAMERA_DEPTH
-// + z) / CAMERA_DEPTH heights tall. Nothing is nearer than z = 0.
+// Space is still; the camera moves through it. Space is measured in screen
+// heights: a thing one unit in front of the glass of the screen, of size s,
+// appears s screen heights tall, s heights right of centre at x = s, y up.
+// The camera is a pinhole CAMERA_DEPTH behind the glass looking along +z,
+// so a thing at depth z beyond the glass is scaled by CAMERA_DEPTH /
+// (CAMERA_DEPTH + z): half size at z = CAMERA_DEPTH, a quarter at three
+// times that. It moves across the screen slower by the same factor, and
+// the window the screen shows at depth z is (CAMERA_DEPTH + z) /
+// CAMERA_DEPTH heights tall. Whatever is behind the glass is not drawn.
+//
+// The camera starts at the origin when the shader loads, and walks slowly
+// forward along +z at WALK units per second.
 
 const CAMERA_DEPTH: f32 = 1.0;
+const WALK: f32 = 0.05;          // units per second forward
+
+fn camera() -> vec3<f32> {
+  return vec3<f32>(0.0, 0.0, WALK * max(u.time - u.loaded, 0.0));
+}
 
 struct Projected {
   centre: vec2<f32>,   // on screen, in screen heights from the centre, y up
-  scale: f32,          // size on screen per unit of size in space
+  scale: f32,          // size on screen per unit of size in space; 0 if behind the glass
 };
 
 fn project(pos: vec3<f32>) -> Projected {
-  let scale = CAMERA_DEPTH / (CAMERA_DEPTH + max(pos.z, 0.0));
-  return Projected(pos.xy * scale, scale);
+  let rel = pos - camera();
+  if (rel.z < 0.0) { return Projected(vec2<f32>(0.0), 0.0); }
+  let scale = CAMERA_DEPTH / (CAMERA_DEPTH + rel.z);
+  return Projected(rel.xy * scale, scale);
 }
 
 // How tall the screen's window is at depth z, in near-plane heights.
@@ -125,6 +136,7 @@ fn glyph_paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
 // The same, at a given brightness.
 fn glyph_paint_at(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32, opacity: f32) -> vec3<f32> {
   let pr = project(g.pos);
+  if (pr.scale <= 0.0) { return vec3<f32>(0.0); }
   let size = g.size * pr.scale;
   // The glyph's cell: uv 0..1 across it, y down, so the character reads upright.
   let rel = (p - pr.centre) / size;
@@ -163,11 +175,12 @@ const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward w
 const MARK: bool = false;        // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
-// Where to be born to start at the top of the screen's window at depth z.
+// Where to be born to start at the top of the window the camera's starting
+// point sees at depth z. The column is fixed in space from then on; as the
+// camera walks, the window shrinks around it.
 fn droplet_top(x: f32, z: f32) -> vec3<f32> { return vec3<f32>(x, 0.5 * window_height(z), z); }
 
-// Seconds to cross the window at its depth, at the same speed in space:
-// further to fall the deeper it is, so it looks slower, as it should.
+// Seconds to fall the height of that window, at the same speed in space.
 fn droplet_run(d: Droplet) -> f32 { return window_height(d.origin.z) / FALL; }
 fn droplet_stamps(d: Droplet) -> u32 { return u32(droplet_run(d) / SPAWN); }
 
@@ -207,8 +220,9 @@ fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   if (falling) {
     col += droplet_head(d, last + 1u, p, px, t);
   }
-  if (MARK && falling) {
-    let dist_px = length(p - project(droplet_pos(d, t)).centre) * u.resolution.y;
+  let pr = project(droplet_pos(d, t));
+  if (MARK && falling && pr.scale > 0.0) {
+    let dist_px = length(p - pr.centre) * u.resolution.y;
     col += vec3<f32>(1.0, 0.3, 0.3) * smoothstep(MARK_PX * 0.5 + 0.7, MARK_PX * 0.5 - 0.7, dist_px);
   }
   return min(col, vec3<f32>(1.0));
@@ -216,9 +230,9 @@ fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
 
 // ------------------------------------------------------------------- frame
 //
-// What is on the screen: columns, each a place where droplets fall one
-// after another from the moment this shader was loaded, each reading on in
-// the text where the last stopped.
+// What is in the space: columns, each a place where droplets fall one after
+// another from the moment this shader was loaded, each reading on in the
+// text where the last stopped. The camera walks toward them.
 
 struct Column {
   x: f32,       // in space
@@ -226,9 +240,8 @@ struct Column {
   start: u32,   // where in the text its first droplet begins
 };
 
-const COLUMNS: array<Column, 2> = array<Column, 2>(
-  Column(0.0, 0.0, 0u),       // at the glass
-  Column(0.9, 2.0, 1000u),    // two units in: a third the size, a third the speed
+const COLUMNS: array<Column, 1> = array<Column, 1>(
+  Column(0.0, 2.0, 0u),       // two units ahead of where the camera starts
 );
 
 // A column's light: its current droplet, and the previous one for its
@@ -252,7 +265,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y * vec2<f32>(1.0, -1.0);
   let px = in.uv * u.resolution;
   var col = vec3<f32>(0.0);
-  for (var i = 0u; i < 2u; i++) {
+  for (var i = 0u; i < 1u; i++) {
     col += column_paint(COLUMNS[i], p, px, u.time);
   }
   return vec4<f32>(min(col, vec3<f32>(1.0)), 1.0);
