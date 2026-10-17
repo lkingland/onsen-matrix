@@ -17,6 +17,7 @@
 //!
 //! Every tunable is a named constant below.
 
+use bevy::camera::{RenderTarget, SubCameraView};
 use bevy::mesh::MeshTag;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
@@ -55,9 +56,7 @@ pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Rng(0x2545F491))
-            .add_systems(Startup, setup)
-            .add_systems(Update, (drift, rain, droplets, glyphs).chain());
+        app.insert_resource(Rng(0x2545F491)).add_systems(Update, (drift, rain, droplets, glyphs).chain());
     }
 }
 
@@ -65,7 +64,9 @@ impl Plugin for ScenePlugin {
 #[derive(Component, Clone, Copy)]
 pub struct Velocity(pub Vec3);
 
-/// The camera, which the rain follows.
+/// A camera into the scene, which the rain follows. Every display gets one;
+/// they share one position and velocity, each seeing its own slice of the
+/// view (`SubCameraView`), so the displays are windows onto one space.
 #[derive(Component)]
 pub struct Walker;
 
@@ -123,9 +124,13 @@ fn fade(bright: f32, age: f32) -> f32 {
     bright * (-DECAY * a).exp().max(FLOOR) * (1.0 - a)
 }
 
-fn setup(mut commands: Commands) {
+/// A camera rendering to `target`, seeing `view` of the whole picture. The
+/// field of view makes one unit, one unit ahead, span the picture's height.
+pub fn spawn_camera(commands: &mut Commands, target: RenderTarget, view: Option<SubCameraView>) {
     commands.spawn((
         Camera3d::default(),
+        Camera { sub_camera_view: view, ..default() },
+        target,
         Projection::Perspective(PerspectiveProjection { fov: 2.0 * (0.5f32).atan(), near: 0.01, ..default() }),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Velocity(Vec3::new(0.0, RISE, -WALK)),
@@ -146,8 +151,8 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 
 /// Keeps DROPLETS falling: each one that has gone is replaced by one born
 /// at the top of the box, somewhere in it, reading from a random place.
-fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMut<Rng>, camera: Single<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
-    let cam = camera.translation;
+fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMut<Rng>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+    let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
     for _ in live.iter().count()..DROPLETS {
         let ahead = rng.range(RAIN_NEAR, RAIN_FAR);
         // The view at that depth: `ahead` units tall, ASPECT times as wide.
@@ -178,9 +183,9 @@ fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMu
 
 /// Droplets stamp a glyph every SPAWN seconds, the head reading on; at the
 /// bottom, or once behind the camera, they are gone.
-fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, camera: Single<&Transform, With<Walker>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>, mut heads: Query<&mut MeshTag>) {
+fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, cameras: Query<&Transform, With<Walker>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>, mut heads: Query<&mut MeshTag>) {
     let now = time.elapsed_secs();
-    let cam_z = camera.translation.z;
+    let Some(cam_z) = cameras.iter().next().map(|t| t.translation.z) else { return };
     for (entity, mut d, t) in &mut drops {
         if t.translation.y < d.bottom || t.translation.z > cam_z {
             commands.entity(entity).despawn();
@@ -210,9 +215,9 @@ fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, camera: Si
 
 /// Glyphs fade and read on; at LIFE, or once behind the camera, they are
 /// despawned, and nothing refers to them.
-fn glyphs(mut commands: Commands, time: Res<Time>, look: Res<Look>, camera: Single<&Transform, With<Walker>>, mut glyphs: Query<(Entity, &Glyph, &Transform, &mut MeshTag)>) {
+fn glyphs(mut commands: Commands, time: Res<Time>, look: Res<Look>, cameras: Query<&Transform, With<Walker>>, mut glyphs: Query<(Entity, &Glyph, &Transform, &mut MeshTag)>) {
     let now = time.elapsed_secs();
-    let cam_z = camera.translation.z;
+    let Some(cam_z) = cameras.iter().next().map(|t| t.translation.z) else { return };
     for (entity, g, t, mut mesh_tag) in &mut glyphs {
         let age = now - g.born;
         if age >= LIFE || t.translation.z > cam_z {

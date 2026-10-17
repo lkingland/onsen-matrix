@@ -18,22 +18,28 @@ mod look;
 mod scene;
 
 use bevy::prelude::*;
-use bevy::window::{MonitorSelection, PresentMode, WindowMode};
+use bevy::window::{ExitCondition, PresentMode};
 
 /// The command line and environment.
 #[derive(Resource, Clone)]
 pub struct Args {
+    /// `--outputs A,B`: the monitors to cover, by name; all of them otherwise.
+    pub outputs: Vec<String>,
     /// `--hold`: never end on input, for iterating.
     pub hold: bool,
+    /// How each window is presented: vsync unless a pacing knob says otherwise.
+    pub present_mode: PresentMode,
+    pub latency: Option<std::num::NonZero<u32>>,
+    pub windowed: bool,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
 }
 
 fn main() {
-    let args = Args { hold: std::env::args().any(|a| a == "--hold"), snap: std::env::var("ONSEN_MATRIX_SNAP").ok().map(Into::into) };
     // Diagnostics knobs, for chasing frame pacing without a rebuild.
     let env = |k: &str| std::env::var(k).ok();
+    let value = |name: &str| std::env::args().skip_while(|a| a != name).nth(1);
     let latency = env("ONSEN_MATRIX_LATENCY").and_then(|v| v.parse().ok()).and_then(std::num::NonZero::new);
     let windowed = env("ONSEN_MATRIX_WINDOWED").is_some();
     let present_mode = match env("ONSEN_MATRIX_PRESENT").as_deref() {
@@ -42,6 +48,14 @@ fn main() {
         Some("mailbox") => PresentMode::Mailbox,
         _ => PresentMode::AutoVsync,
     };
+    let args = Args {
+        outputs: value("--outputs").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
+        hold: std::env::args().any(|a| a == "--hold"),
+        present_mode,
+        latency,
+        windowed,
+        snap: env("ONSEN_MATRIX_SNAP").map(Into::into),
+    };
     App::new()
         .insert_resource(args)
         .insert_resource(ClearColor(Color::BLACK))
@@ -49,21 +63,9 @@ fn main() {
             DefaultPlugins
                 // Assets live in the source tree, wherever the binary is.
                 .set(AssetPlugin { file_path: concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into(), ..default() })
-                // One borderless fullscreen window. On Hyprland it maps on
-                // the focused monitor; the launcher chooses which by
-                // focusing it first, as Omarchy's own screensaver does.
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "onsen-matrix".into(),
-                        name: Some("onsen-matrix".into()),
-                        mode: if windowed { WindowMode::Windowed } else { WindowMode::BorderlessFullscreen(MonitorSelection::Current) },
-                        present_mode,
-                        desired_maximum_frame_latency: latency,
-                        decorations: false,
-                        ..default()
-                    }),
-                    ..default()
-                }),
+                // No window up front: host.rs opens one per monitor, each
+                // fullscreen on its own, once the monitors are known.
+                .set(WindowPlugin { primary_window: None, exit_condition: ExitCondition::OnAllClosed, ..default() }),
         )
         .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin))
         .run();
