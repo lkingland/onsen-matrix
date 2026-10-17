@@ -1,7 +1,9 @@
 // How a glyph looks. Edit and save: Bevy reloads this file.
 //
 // A glyph is a quad, 1 + 2 * AURA_REACH cells wide, with the character's
-// cell in the middle. The material says which character and how bright.
+// cell in the middle. Every glyph shares one material, so they are all
+// drawn as instances; which character, how bright and how white comes
+// from the instance's tag, packed as src/look.rs packs it.
 // Three layers: the aura, a wide tinted repeat of the character's shape
 // beyond its cell; the tube's glow, the character's light scattered and
 // smeared downward; and the tube's core, the character sharp. The glow and
@@ -10,18 +12,43 @@
 
 import bevy_pbr::render::{
     mesh_view_bindings::globals,
-    forward_io::VertexOutput,
+    mesh_functions,
+    view_transformations::position_world_to_clip,
 };
 
-struct Params {
-  code: u32,     // the character, as an atlas index
-  bright: f32,   // brightness
-  white: f32,    // how far the colour is pulled toward white
-  _pad: f32,
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var atlas: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var atlas_sampler: sampler;
+
+const BRIGHT_MAX: f32 = 2.0;     // brightness is 8 bits over 0..BRIGHT_MAX; matches src/look.rs
+
+struct Vertex {
+  @builtin(instance_index) instance_index: u32,
+  @location(0) position: vec3<f32>,
+  @location(1) normal: vec3<f32>,
+  @location(2) uv: vec2<f32>,
 };
-@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> params: Params;
-@group(constants::MATERIAL_BIND_GROUP) @binding(1) var atlas: texture_2d<f32>;
-@group(constants::MATERIAL_BIND_GROUP) @binding(2) var atlas_sampler: sampler;
+
+struct VertexOutput {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+  @location(1) @interpolate(flat) code: u32,
+  @location(2) @interpolate(flat) bright: f32,
+  @location(3) @interpolate(flat) white: f32,
+};
+
+@vertex
+fn vertex(v: Vertex) -> VertexOutput {
+  let tag = mesh_functions::get_tag(v.instance_index);
+  let world_from_local = mesh_functions::get_world_from_local(v.instance_index);
+  let world = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.position, 1.0));
+  var out: VertexOutput;
+  out.position = position_world_to_clip(world.xyz);
+  out.uv = v.uv;
+  out.code = tag & 0x3ffu;
+  out.bright = f32((tag >> 10u) & 0xffu) / 255.0 * BRIGHT_MAX;
+  out.white = f32((tag >> 18u) & 0x3fu) / 63.0;
+  return out;
+}
 
 // ------------------------------------------------------------------- atlas
 //
@@ -133,7 +160,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
   let uv = (in.uv - 0.5) * (1.0 + 2.0 * AURA_REACH) + 0.5;
   let px = in.position.xy;
   let t = globals.time;
-  var col = aura(params.code, uv) + tube(params.code, uv, px, t);
-  col = mix(col, vec3<f32>(max(max(col.r, col.g), col.b)), params.white);
-  return vec4<f32>(col * params.bright, 1.0);
+  var col = aura(in.code, uv) + tube(in.code, uv, px, t);
+  col = mix(col, vec3<f32>(max(max(col.r, col.g), col.b)), in.white);
+  // Bevy's Add mode blends premultiplied: out = src + dst * (1 - alpha).
+  // Alpha 0 makes it pure addition, so light only ever adds to light and
+  // nothing a glyph draws can hide what is behind it.
+  return vec4<f32>(col * in.bright, 0.0);
 }

@@ -13,6 +13,7 @@ mod atlas;
 mod look;
 mod scene;
 
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::window::{MonitorSelection, PresentMode, WindowMode};
 
@@ -36,12 +37,14 @@ fn main() {
                 title: "onsen-matrix".into(),
                 name: Some("onsen-matrix".into()),
                 mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
-                present_mode: PresentMode::AutoVsync,
+                present_mode: PresentMode::AutoNoVsync,
                 decorations: false,
                 ..default()
             }),
             ..default()
         }))
         .add_plugins((look::LookPlugin, scene::ScenePlugin))
+        // Frame times, logged every few seconds, to see what the GPU can take.
+        .add_plugins((FrameTimeDiagnosticsPlugin::default(), LogDiagnosticsPlugin::default()))
         .run();
 }

@@ -1,4 +1,4 @@
-//! The scene: columns, droplets, glyphs, and the camera, as entities with
+//! The scene: the rain of droplets, their glyphs, and the camera, as entities with
 //! transforms and velocities. Every tunable is a named constant here.
 //!
 //! Space is in units; the camera's field of view is set so that one unit
@@ -11,7 +11,9 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
-use crate::look::{GlyphMaterial, GlyphParams, Look};
+use bevy::mesh::MeshTag;
+
+use crate::look::{tag, Look};
 use crate::Args;
 
 // ------------------------------------------------------------------ camera
@@ -34,16 +36,27 @@ const HEAD: f32 = 1.3;           // the head's brightness
 const HEAD_SIZE: f32 = 1.25;     // the head's size, relative to a stamped glyph
 const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward white
 
-// ----------------------------------------------------------------- columns
-/// Where droplets fall: (x, z, where in the text the first one starts).
-const COLUMNS: &[(f32, f32, usize)] = &[(0.5, -3.0, 0)];
+// -------------------------------------------------------------------- rain
+//
+// The coordinate system: units, y up, ahead is -z, the camera at the
+// origin to begin with and walking. One unit, one unit ahead, spans the
+// screen's height. The rain falls in a box that moves with the camera:
+// RAIN_WIDTH across, from RAIN_NEAR to RAIN_FAR ahead, born at RAIN_TOP
+// and gone below RAIN_BOTTOM or once behind the camera. There are always
+// DROPLETS of them; when one goes, another is born somewhere in the box.
+const DROPLETS: usize = 150;     // how many droplets are falling at once
+const RAIN_WIDTH: f32 = 6.0;     // units, centred on the camera
+const RAIN_NEAR: f32 = 0.3;      // units ahead of the camera
+const RAIN_FAR: f32 = 6.0;
+const RAIN_TOP: f32 = 2.0;       // units above the camera
+const RAIN_BOTTOM: f32 = -2.0;
 
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup)
-            .add_systems(Update, (drift, columns, droplets, glyphs, end_on_input, snapshot).chain());
+            .add_systems(Update, (drift, rain, droplets, glyphs, end_on_input, snapshot).chain());
     }
 }
 
@@ -70,13 +83,22 @@ pub struct Droplet {
     head: Entity,
 }
 
-/// A place where droplets fall one after another.
+/// The camera, for the rain to follow.
 #[derive(Component)]
-pub struct Column {
-    x: f32,
-    z: f32,
-    next_start: usize,
-    live: Option<Entity>,
+pub struct Walker;
+
+/// A small random number generator, so the rain needs no crate.
+#[derive(Resource)]
+pub struct Rng(u32);
+
+impl Rng {
+    fn next(&mut self) -> f32 {
+        self.0 = self.0.wrapping_mul(1664525).wrapping_add(1013904223);
+        hash(self.0)
+    }
+    fn range(&mut self, lo: f32, hi: f32) -> f32 {
+        lo + (hi - lo) * self.next()
+    }
 }
 
 fn setup(mut commands: Commands) {
@@ -87,13 +109,12 @@ fn setup(mut commands: Commands) {
         Projection::Perspective(PerspectiveProjection { fov: 2.0 * (0.5f32).atan(), near: 0.01, ..default() }),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Velocity(Vec3::new(0.0, RISE, -WALK)),
+        Walker,
         bevy::camera::Hdr,
         bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface,
         Bloom::NATURAL,
     ));
-    for &(x, z, start) in COLUMNS {
-        commands.spawn(Column { x, z, next_start: start, live: None });
-    }
+    commands.insert_resource(Rng(0x2545F491));
 }
 
 fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
@@ -111,44 +132,36 @@ fn hash(n: u32) -> f32 {
     x as f32 / u32::MAX as f32
 }
 
-/// How tall the window is at a depth z ahead of the camera, in units.
-fn window_height(z_ahead: f32) -> f32 {
-    z_ahead.max(0.0)
-}
-
-/// A column with no live droplet starts one at its top.
-fn columns(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut materials: ResMut<Assets<GlyphMaterial>>, mut cols: Query<&mut Column>, live: Query<(), With<Droplet>>) {
-    for mut c in &mut cols {
-        if c.live.is_some_and(|e| live.get(e).is_ok()) {
-            continue;
-        }
-        // The window the camera's starting point sees at this depth.
-        let height = window_height(-c.z);
-        let (top, bottom) = (0.5 * height, -0.5 * height);
-        let start = c.next_start;
-        let stamps = (height / FALL / SPAWN) as usize + 1;
-        c.next_start += stamps;
+/// Keeps DROPLETS falling: each one that has gone is replaced by one born
+/// at the top of the box, somewhere in it, reading from a random place.
+fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut rng: ResMut<Rng>, camera: Single<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+    let cam = camera.translation;
+    for _ in live.iter().count()..DROPLETS {
+        let x = cam.x + rng.range(-0.5 * RAIN_WIDTH, 0.5 * RAIN_WIDTH);
+        let z = cam.z - rng.range(RAIN_NEAR, RAIN_FAR);
+        let start = (rng.next() * look.text.len() as f32) as usize;
+        let (top, bottom) = (cam.y + RAIN_TOP, cam.y + RAIN_BOTTOM);
         let head = commands
             .spawn((
                 Mesh3d(look.quad.clone()),
-                MeshMaterial3d(materials.add(GlyphMaterial { params: GlyphParams { code: look.text[start % look.text.len()], bright: HEAD, white: HEAD_WHITE, _pad: 0.0 }, atlas: look.atlas.clone() })),
+                MeshMaterial3d(look.material.clone()),
+                tag(look.text[start % look.text.len()], HEAD, HEAD_WHITE),
                 Transform::from_scale(Vec3::splat(GLYPH_SIZE * HEAD_SIZE)),
             ))
             .id();
-        let droplet = commands
-            .spawn((Droplet { born: time.elapsed_secs(), start, stamped: 0, bottom, head }, Transform::from_xyz(c.x, top, c.z), Visibility::default(), Velocity(Vec3::new(0.0, -FALL, 0.0))))
-            .add_child(head)
-            .id();
-        c.live = Some(droplet);
+        commands
+            .spawn((Droplet { born: time.elapsed_secs(), start, stamped: 0, bottom, head }, Transform::from_xyz(x, top, z), Visibility::default(), Velocity(Vec3::new(0.0, -FALL, 0.0))))
+            .add_child(head);
     }
 }
 
 /// Droplets stamp a glyph every SPAWN seconds, the head reading on; at the
-/// bottom they are gone.
-fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut materials: ResMut<Assets<GlyphMaterial>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>, heads: Query<&MeshMaterial3d<GlyphMaterial>>) {
+/// bottom, or once behind the camera, they are gone.
+fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, camera: Single<&Transform, With<Walker>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>, mut heads: Query<&mut MeshTag>) {
     let now = time.elapsed_secs();
+    let cam_z = camera.translation.z;
     for (entity, mut d, t) in &mut drops {
-        if t.translation.y < d.bottom {
+        if t.translation.y < d.bottom || t.translation.z > cam_z {
             commands.entity(entity).despawn();
             continue;
         }
@@ -162,35 +175,33 @@ fn droplets(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut materi
             commands.spawn((
                 Glyph { born: when, start: d.start + k, bright },
                 Mesh3d(look.quad.clone()),
-                MeshMaterial3d(materials.add(GlyphMaterial { params: GlyphParams { code: look.text[(d.start + k) % look.text.len()], bright, white: 0.0, _pad: 0.0 }, atlas: look.atlas.clone() })),
+                MeshMaterial3d(look.material.clone()),
+                tag(look.text[(d.start + k) % look.text.len()], bright, 0.0),
                 Transform::from_translation(pos).with_scale(Vec3::splat(GLYPH_SIZE)),
             ));
             d.stamped += 1;
         }
-        if let Ok(head) = heads.get(d.head) {
-            if let Some(mut m) = materials.get_mut(&head.0) {
-                m.params.code = look.text[(d.start + d.stamped as usize) % look.text.len()];
-            }
+        if let Ok(mut head) = heads.get_mut(d.head) {
+            *head = tag(look.text[(d.start + d.stamped as usize) % look.text.len()], HEAD, HEAD_WHITE);
         }
     }
 }
 
-/// Glyphs fade, read on, and at LIFE are despawned: the entity and its
-/// material go, and nothing refers to them.
-fn glyphs(mut commands: Commands, time: Res<Time>, look: Res<Look>, mut materials: ResMut<Assets<GlyphMaterial>>, glyphs: Query<(Entity, &Glyph, &MeshMaterial3d<GlyphMaterial>)>) {
+/// Glyphs fade, read on, and at LIFE, or once behind the camera, are
+/// despawned, and nothing refers to them.
+fn glyphs(mut commands: Commands, time: Res<Time>, look: Res<Look>, camera: Single<&Transform, With<Walker>>, mut glyphs: Query<(Entity, &Glyph, &Transform, &mut MeshTag)>) {
     let now = time.elapsed_secs();
-    for (entity, g, material) in &glyphs {
+    let cam_z = camera.translation.z;
+    for (entity, g, t, mut mesh_tag) in &mut glyphs {
         let age = now - g.born;
-        if age >= LIFE {
+        if age >= LIFE || t.translation.z > cam_z {
             commands.entity(entity).despawn();
             continue;
         }
         let a = (age / LIFE).clamp(0.0, 1.0);
         let step = (age.max(0.0) / TICK) as usize;
-        if let Some(mut m) = materials.get_mut(&material.0) {
-            m.params.bright = g.bright * (-DECAY * a).exp().max(FLOOR) * (1.0 - a);
-            m.params.code = look.text[(g.start + step) % look.text.len()];
-        }
+        let bright = g.bright * (-DECAY * a).exp().max(FLOOR) * (1.0 - a);
+        *mesh_tag = tag(look.text[(g.start + step) % look.text.len()], bright, 0.0);
     }
 }
 

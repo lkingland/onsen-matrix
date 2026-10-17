@@ -1,13 +1,16 @@
-//! How a glyph looks: a material on a quad. The material carries the atlas
-//! and, per glyph, which character to show and how bright. The shader,
+//! How a glyph looks: one material on a quad, shared by every glyph, so
+//! Bevy draws them all as instances of one mesh in one call. What differs
+//! per glyph, its character, brightness and whiteness, is packed into the
+//! instance's `MeshTag`, which the shader unpacks. The shader,
 //! `assets/shaders/glyph.wesl`, draws the tube look and the aura; Bevy
 //! reloads it when the file changes.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageSampler, ImageSamplerDescriptor};
 use bevy::material::AlphaMode;
+use bevy::mesh::MeshTag;
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat};
+use bevy::render::render_resource::{AsBindGroup, Extent3d, TextureDimension, TextureFormat};
 use bevy::shader::ShaderRef;
 
 use crate::atlas;
@@ -20,34 +23,26 @@ impl Plugin for LookPlugin {
     }
 }
 
-/// What every glyph shares: the atlas, the text, and the quad.
+/// What every glyph shares: the material with the atlas, the quad, the text.
 #[derive(Resource)]
 pub struct Look {
-    pub atlas: Handle<Image>,
+    pub material: Handle<GlyphMaterial>,
     pub quad: Handle<Mesh>,
     /// The text as atlas indices, in reading order.
     pub text: Vec<u32>,
 }
 
-/// Per-glyph values the shader reads. Layout matches `Params` in the shader.
-#[derive(ShaderType, Debug, Clone, Copy)]
-pub struct GlyphParams {
-    pub code: u32,     // the character, as an atlas index
-    pub bright: f32,   // brightness, 0..1 and beyond for the head
-    pub white: f32,    // how far the colour is pulled toward white
-    pub _pad: f32,
-}
-
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct GlyphMaterial {
-    #[uniform(0)]
-    pub params: GlyphParams,
-    #[texture(1)]
-    #[sampler(2)]
+    #[texture(0)]
+    #[sampler(1)]
     pub atlas: Handle<Image>,
 }
 
 impl Material for GlyphMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "shaders/glyph.wesl".into()
+    }
     fn fragment_shader() -> ShaderRef {
         "shaders/glyph.wesl".into()
     }
@@ -60,7 +55,19 @@ impl Material for GlyphMaterial {
 /// that much larger than the cell on every side. Matches the shader.
 pub const AURA_REACH: f32 = 0.35;
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut meshes: ResMut<Assets<Mesh>>) {
+/// The brightest a tag can say; brightness is stored in 8 bits over 0..BRIGHT_MAX.
+pub const BRIGHT_MAX: f32 = 2.0;
+
+/// A glyph's per-instance data: the character in the low 10 bits, the
+/// brightness in the next 8 (over 0..BRIGHT_MAX), the whiteness in 6.
+/// Matches `unpack` in the shader.
+pub fn tag(code: u32, bright: f32, white: f32) -> MeshTag {
+    let b = ((bright / BRIGHT_MAX).clamp(0.0, 1.0) * 255.0).round() as u32;
+    let w = (white.clamp(0.0, 1.0) * 63.0).round() as u32;
+    MeshTag::new((code & 0x3ff) | (b << 10) | (w << 18))
+}
+
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<GlyphMaterial>>) {
     let (pixels, w, h) = atlas::build();
     let mut image = Image::new(
         Extent3d { width: w, height: h, depth_or_array_layers: 1 },
@@ -71,6 +78,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut meshes: 
     );
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
     let atlas = images.add(image);
+    let material = materials.add(GlyphMaterial { atlas });
     let quad = meshes.add(Rectangle::new(1.0 + 2.0 * AURA_REACH, 1.0 + 2.0 * AURA_REACH));
-    commands.insert_resource(Look { atlas, quad, text: atlas::text_indices() });
+    commands.insert_resource(Look { material, quad, text: atlas::text_indices() });
 }
