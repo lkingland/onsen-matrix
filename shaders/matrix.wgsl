@@ -253,21 +253,28 @@ const AURA: f32 = 0.45;          // brightness
 const AURA_REACH: f32 = 0.35;    // blur radius, in cell units
 const AURA_TINT: vec3<f32> = vec3<f32>(0.2, 0.9, 0.5);
 
-// The glyph's shape blurred over AURA_REACH: the mean coverage over two
-// rings of taps and the centre.
+// The glyph's shape blurred over AURA_REACH. Each tap is itself soft, the
+// distance field ramped over its whole range, and the taps sit close enough
+// to merge: the centre, a ring at half reach and a ring at full reach.
+fn aura_tap(code: u32, uv: vec2<f32>) -> f32 {
+  return smoothstep(0.0, 0.6, glyph_sdf(code, uv));
+}
+
 fn aura(code: u32, uv: vec2<f32>) -> vec3<f32> {
-  var acc = 0.0;
+  var acc = 2.0 * aura_tap(code, uv);
   for (var i = 0u; i < 8u; i++) {
     let a = f32(i) * 0.7853982;   // 45 degree steps
-    let dir = vec2<f32>(cos(a), sin(a));
-    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH));
-    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH * 0.5));
+    acc += 1.5 * aura_tap(code, uv + vec2<f32>(cos(a), sin(a)) * AURA_REACH * 0.5);
   }
-  acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv));
+  for (var i = 0u; i < 12u; i++) {
+    let a = f32(i) * 0.5235988 + 0.2618;   // 30 degree steps, offset from the inner ring
+    acc += aura_tap(code, uv + vec2<f32>(cos(a), sin(a)) * AURA_REACH);
+  }
+  acc /= 2.0 + 8.0 * 1.5 + 12.0;
   // Softly to nothing at the reach's edge, so the layer has no border.
   let edge = smoothstep(-AURA_REACH, 0.0, uv.x) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.x)
            * smoothstep(-AURA_REACH, 0.0, uv.y) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.y);
-  return AURA_TINT * AURA * (acc / 17.0) * edge;
+  return AURA_TINT * AURA * acc * edge;
 }
 
 // The character `code` as seen on the tube, over its cell uv (cell_px pixels
