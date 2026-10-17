@@ -1,8 +1,8 @@
 // The picture. Edit and save: the running host reloads this file on the next
 // frame. Errors go to the host's log and the previous picture stays up.
 //
-// Sections: the bindings; the camera and space; the Droplet; the glyph
-// atlas; the tube look; the frame.
+// Sections: the bindings; the camera and space; the Glyph; the Droplet; the
+// glyph atlas; the aura and the tube look; the frame.
 
 // ---------------------------------------------------------------- bindings
 
@@ -56,40 +56,24 @@ fn project(pos: vec3<f32>) -> Projected {
 
 // ------------------------------------------------------------------- glyph
 //
-// The Glyph is the system's one element. Painted at a point in space at
-// time `born`, it starts fully bright and fades to nothing over LIFE
-// seconds, at which point it is gone: nothing draws it, nothing keeps it.
-// While it fades it reads the gongyō: every TICK seconds it becomes the next
-// character of the text, starting from `start`.
+// The Glyph is the system's one visible element: one character, painted at
+// a point in space at time `born`, fully bright, fading to nothing over
+// LIFE seconds, at which point it is gone: nothing draws it, nothing keeps
+// it. It never changes; what it says was decided by whoever painted it.
 
 struct Glyph {
   pos: vec3<f32>,   // in space, as above
   size: f32,        // its cell's height at the near plane, in screen heights
   born: f32,        // the time it was painted
-  start: u32,       // its first character's place in the text
+  code: u32,        // its character, as an atlas index
 };
 
-const LIFE: f32 = 2.6667;        // seconds from painted to gone (fades half again as fast as 4 s)
-const TICK: f32 = 0.75;          // seconds between characters
+const LIFE: f32 = 2.6667;        // seconds from painted to gone
 const GLYPH_SIZE: f32 = 0.0625;  // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
 fn glyph_opacity(g: Glyph, t: f32) -> f32 { return clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
-
-// The character a glyph shows at time t: the text, read on from `start`.
-fn glyph_char(g: Glyph, t: f32) -> u32 {
-  let step = u32(floor(max(glyph_age(g, t), 0.0) / TICK));
-  return text[(g.start + step) % arrayLength(&text)];
-}
-
-// A random number in 0..1 for an integer, stable from frame to frame.
-fn hash(n: u32) -> f32 {
-  var x = n * 747796405u + 2891336453u;
-  x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
-  x = (x >> 22u) ^ x;
-  return f32(x) / 4294967295.0;
-}
 
 // The light a glyph casts on the screen point p (screen heights from the
 // centre, y up), at pixel px, at time t. Nothing once it is gone.
@@ -102,29 +86,31 @@ fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let uv = vec2<f32>(rel.x + 0.5, 0.5 - rel.y);
   // The aura reaches beyond the cell; the tube stays within it.
   if (uv.x < -AURA_REACH || uv.x > 1.0 + AURA_REACH || uv.y < -AURA_REACH || uv.y > 1.0 + AURA_REACH) { return vec3<f32>(0.0); }
-  let code = glyph_char(g, t);
-  var col = aura(code, uv);
+  var col = aura(g.code, uv);
   if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-    col += tube(code, uv, size * u.resolution.y, px, t);
+    col += tube(g.code, uv, size * u.resolution.y, px, t);
   }
   return min(col, vec3<f32>(1.0)) * glyph_opacity(g, t);
 }
 
 // ----------------------------------------------------------------- droplet
 //
-// The Droplet has no look of its own: it is a point that falls. Born at
-// `origin` at time `born`, it descends at FALL screen heights per second,
-// and every SPAWN seconds it paints a Glyph where it is, pinned there. The
-// k-th glyph reads the text from `start + k`, so a column reads downward.
+// The Droplet has no look of its own: it is a point that falls, reading
+// the text. Born at `origin` at time `born`, it descends at FALL screen
+// heights per second, and every SPAWN seconds it paints a Glyph where it
+// is, pinned there, saying the next character of the text: the k-th glyph
+// says text[start + k].
 
 struct Droplet {
   origin: vec3<f32>,   // where it was born, in space
   born: f32,           // when
-  start: u32,          // its first glyph's place in the text
+  start: u32,          // where in the text it begins reading
 };
 
 const FALL: f32 = 0.0625;        // screen heights per second: 16 seconds top to bottom
 const SPAWN: f32 = 1.0;          // seconds between glyphs
+const MARK: bool = true;         // for testing: show the droplet itself as a dot
+const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
 // The screen is one height tall at the near plane and (CAMERA_DEPTH + z) /
 // CAMERA_DEPTH heights tall at depth z, so a droplet there has further to
@@ -133,17 +119,17 @@ fn droplet_run(d: Droplet) -> f32 { return (CAMERA_DEPTH + d.origin.z) / CAMERA_
 fn droplet_run_glyphs(d: Droplet) -> u32 { return u32(droplet_run(d) / SPAWN); }
 // Where to be born to start at the top of the screen at depth z.
 fn droplet_top(x: f32, z: f32) -> vec3<f32> { return vec3<f32>(x, 0.5 * (CAMERA_DEPTH + z) / CAMERA_DEPTH, z); }
-const MARK: bool = true;         // for testing: show the droplet itself as a dot
-const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
 fn droplet_pos(d: Droplet, t: f32) -> vec3<f32> {
   return d.origin - vec3<f32>(0.0, FALL * max(t - d.born, 0.0), 0.0);
 }
 
-// The k-th glyph a droplet painted.
+// The k-th glyph a droplet painted: where it was, when, and the k-th
+// character on from its start in the text.
 fn droplet_glyph(d: Droplet, k: u32) -> Glyph {
   let when = d.born + f32(k) * SPAWN;
-  return Glyph(droplet_pos(d, when), GLYPH_SIZE, when, d.start + k);
+  let code = text[(d.start + k) % arrayLength(&text)];
+  return Glyph(droplet_pos(d, when), GLYPH_SIZE, when, code);
 }
 
 // The light of every glyph a droplet has painted that is still alive: only

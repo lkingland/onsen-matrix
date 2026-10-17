@@ -52,27 +52,38 @@ snapshot. `ONSEN_MATRIX_ATLAS=path` writes the atlas as a PGM at startup.
 
 ## The picture so far
 
-The shader is in sections: bindings; the camera and space; the Droplet; the
-atlas; the tube look; the frame.
+The shader is in sections: bindings; the camera and space; the Glyph; the
+Droplet; the atlas; the aura and the tube look; the frame.
 
-**Space** is measured in screen heights at the near plane: a thing at
-(x, y, 0) of size s appears s screen heights tall. The camera sits
-`CAMERA_DEPTH` behind the near plane and looks along +z, so a thing at depth
-z is scaled by `CAMERA_DEPTH / (CAMERA_DEPTH + z)`. Nothing is nearer than
-z = 0.
+**Space** is measured in screen heights at the near plane, the glass of the
+screen, z = 0: a thing at (x, y, 0) of size s appears s screen heights tall.
+The camera is a pinhole `CAMERA_DEPTH` behind the glass looking straight in,
+so a thing at depth z appears `1 / (1 + z)` as large and moves across the
+screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
+`1 + z` heights tall. Nothing is nearer than z = 0.
 
-**The Droplet** is the system's one element: a glyph at a point in space
-(`pos`, `size`, `seed`) that every `TICK` seconds becomes a different random
-character from the pool. `CYCLE` holds it still on `STILL_CHAR`.
+**The Glyph** is the one visible element: a single character painted at a
+point in space at a moment, fully bright, fading to nothing over `LIFE`
+seconds and then gone. It never changes; what it says was decided by whoever
+painted it.
 
-**The tube look** draws a character the way a phosphor tube would: a sharp
-core over a scattered, downward-smeared glow, both under an aperture grille
-of red, green and blue stripes and slowly rolling scanlines, the light
-breathing a little. Every part of it is a named constant at the top of its
-section.
+**The Droplet** has no look of its own: a point that falls at `FALL` screen
+heights per second, reading the text. Every `SPAWN` seconds it paints a
+Glyph where it is, pinned there, saying the next character of the gongyō.
+It stops painting at the bottom of the screen at its depth, and the next
+droplet in its column begins, reading on. `MARK` shows a droplet as a red
+dot, for watching.
 
-**The frame** currently places one Droplet at the origin, as near as
-anything can be, a sixteenth of the screen high.
+**The look** draws a Glyph in three layers: the aura, a wide tinted repeat of
+the character's shape beyond its cell; the tube's glow, the character's
+light scattered and smeared downward; and the tube's core, the character
+sharp. The glow and core sit under an aperture grille of red, green and blue
+stripes and slowly rolling scanlines, the light breathing a little. Every
+part of it is a named constant at the top of its section.
+
+**The frame** runs two columns of droplets from the moment the shader was
+loaded: one at the glass, and one two units away, which looks a third the
+size and falls a third as fast.
 
 ## The characters
 
