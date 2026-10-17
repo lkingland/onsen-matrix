@@ -36,6 +36,8 @@ pub struct Gpu {
     layout: wgpu::BindGroupLayout,
     atlas_view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    /// The text, as atlas indices in reading order.
+    text: wgpu::Buffer,
     pipeline: Option<wgpu::RenderPipeline>,
     /// The surface format, known once the first screen is configured; the
     /// pipeline targets it.
@@ -83,8 +85,23 @@ impl Gpu {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None },
+                    count: None,
+                },
             ],
         });
+        let indices = atlas::text_indices();
+        let text = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("text"),
+            size: (indices.len() * 4) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&text, 0, unsafe { std::slice::from_raw_parts(indices.as_ptr() as *const u8, indices.len() * 4) });
+        log::info!("text: {} characters", indices.len());
         let (atlas_view, rows) = atlas::upload(&device, &queue);
         log::info!("atlas grid: {}x{rows}", atlas::COLS);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -94,7 +111,7 @@ impl Gpu {
             mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
-        Gpu { adapter, device, queue, layout, atlas_view, sampler, pipeline: None, format: None, shader }
+        Gpu { adapter, device, queue, layout, atlas_view, sampler, text, pipeline: None, format: None, shader }
     }
 
     pub fn target(&self, label: &str) -> Target {
@@ -111,6 +128,7 @@ impl Gpu {
                 wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&self.atlas_view) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                wgpu::BindGroupEntry { binding: 3, resource: self.text.as_entire_binding() },
             ],
         });
         Target { uniforms, bind_group }

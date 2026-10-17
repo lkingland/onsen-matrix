@@ -29,6 +29,12 @@ pub fn charset() -> Vec<char> {
     TEXT.chars().filter(|c| seen.insert(*c)).collect()
 }
 
+/// The text as a sequence of atlas indices, so a shader can read it in order.
+pub fn text_indices() -> Vec<u32> {
+    let index: std::collections::HashMap<char, u32> = charset().into_iter().enumerate().map(|(i, c)| (c, i as u32)).collect();
+    TEXT.chars().map(|c| index[&c]).collect()
+}
+
 /// Builds the atlas and uploads it as an R8 texture. Returns the view and
 /// the grid's row count.
 pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, u32) {
@@ -185,6 +191,16 @@ mod tests {
         assert_eq!(set.len(), chars.len());
         assert_eq!(chars[0], '方', "chapter 2 opens 方便品第二");
         assert!(chars.len() <= (COLS * 64) as usize);
+    }
+
+    #[test]
+    fn text_indices_follow_the_text() {
+        let chars = charset();
+        let idx = text_indices();
+        assert_eq!(idx.len(), TEXT.chars().count());
+        let back: String = idx.iter().map(|&i| chars[i as usize]).collect();
+        assert_eq!(back, TEXT);
+        assert_eq!(&idx[..5], &[0, 1, 2, 3, 4], "the opening characters are new, so number themselves");
     }
 
     #[test]

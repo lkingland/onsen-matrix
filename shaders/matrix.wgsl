@@ -14,6 +14,7 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var atlas: texture_2d<f32>;
 @group(0) @binding(2) var atlas_sampler: sampler;
+@group(0) @binding(3) var<storage, read> text: array<u32>;   // the gongyō, as atlas indices in reading order
 
 struct VertexOut {
   @builtin(position) pos: vec4<f32>,
@@ -53,23 +54,33 @@ fn project(pos: vec3<f32>) -> Projected {
   return Projected(pos.xy * scale, scale);
 }
 
-// ----------------------------------------------------------------- droplet
+// ------------------------------------------------------------------- glyph
 //
-// The Droplet is the system's one element: a glyph at a point in space
-// that, every TICK seconds, becomes a different random character.
+// The Glyph is the system's one element. Painted at a point in space at
+// time `born`, it starts fully bright and fades to nothing over LIFE
+// seconds, at which point it is gone: nothing draws it, nothing keeps it.
+// While it fades it reads the gongyō: every TICK seconds it becomes the next
+// character of the text, starting from `start`.
 
-struct Droplet {
+struct Glyph {
   pos: vec3<f32>,   // in space, as above
   size: f32,        // its cell's height at the near plane, in screen heights
-  seed: u32,        // makes its sequence of characters its own
+  born: f32,        // the time it was painted
+  start: u32,       // its first character's place in the text
 };
 
-const CYCLE: bool = false;       // false holds STILL_CHAR; true cycles every TICK
-const STILL_CHAR: u32 = 0u;      // 方, the first character of 方便品第二
-const TICK: f32 = 0.75;          // seconds between character changes
-// The pool: every character of chapters 2 and 16 (Hōben and Juryō), in the atlas.
-const FIRST_CHAR: u32 = 0u;
-const CHAR_COUNT: u32 = 744u;
+const LIFE: f32 = 4.0;           // seconds from painted to gone
+const TICK: f32 = 0.75;          // seconds between characters
+
+fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
+fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
+fn glyph_opacity(g: Glyph, t: f32) -> f32 { return clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
+
+// The character a glyph shows at time t: the text, read on from `start`.
+fn glyph_char(g: Glyph, t: f32) -> u32 {
+  let step = u32(floor(max(glyph_age(g, t), 0.0) / TICK));
+  return text[(g.start + step) % arrayLength(&text)];
+}
 
 // A random number in 0..1 for an integer, stable from frame to frame.
 fn hash(n: u32) -> f32 {
@@ -79,23 +90,17 @@ fn hash(n: u32) -> f32 {
   return f32(x) / 4294967295.0;
 }
 
-// The character a droplet shows at time t.
-fn droplet_char(d: Droplet, t: f32) -> u32 {
-  if (!CYCLE) { return STILL_CHAR; }
-  let tick = u32(floor(t / TICK));
-  return FIRST_CHAR + u32(hash(d.seed * 7919u + tick) * f32(CHAR_COUNT));
-}
-
-// The light a droplet casts on the screen point p (screen heights from the
-// centre, y up), at pixel px, at time t.
-fn droplet(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
-  let pr = project(d.pos);
-  let size = d.size * pr.scale;
-  // The glyph's cell: uv 0..1 across it, y down, so the glyph reads upright.
+// The light a glyph casts on the screen point p (screen heights from the
+// centre, y up), at pixel px, at time t. Nothing once it is gone.
+fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+  if (!glyph_alive(g, t)) { return vec3<f32>(0.0); }
+  let pr = project(g.pos);
+  let size = g.size * pr.scale;
+  // The glyph's cell: uv 0..1 across it, y down, so the character reads upright.
   let rel = (p - pr.centre) / size;
   let uv = vec2<f32>(rel.x + 0.5, 0.5 - rel.y);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return vec3<f32>(0.0); }
-  return tube(droplet_char(d, t), uv, size * u.resolution.y, px, t);
+  return tube(glyph_char(g, t), uv, size * u.resolution.y, px, t) * glyph_opacity(g, t);
 }
 
 // ------------------------------------------------------------------- atlas
@@ -196,8 +201,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space: the origin in the middle, one unit = screen height, y up.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y * vec2<f32>(1.0, -1.0);
   let px = in.uv * u.resolution;
-  // One droplet, as near as anything can be, in the middle.
-  let d = Droplet(vec3<f32>(0.0, 0.0, 0.0), 0.0625, 1u);
-  let col = droplet(d, p, px, u.time);
+  // The demonstration: a glyph is painted at the origin, as near as anything
+  // can be, every LIFE seconds; each picks up the text where the last left off.
+  let n = floor(u.time / LIFE);
+  let g = Glyph(vec3<f32>(0.0, 0.0, 0.0), 0.0625, n * LIFE, u32(n * floor(LIFE / TICK)));
+  let col = paint(g, p, px, u.time);
   return vec4<f32>(col, 1.0);
 }
