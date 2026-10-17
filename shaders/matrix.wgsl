@@ -57,8 +57,8 @@ fn project(pos: vec3<f32>) -> Projected {
 // ------------------------------------------------------------------- glyph
 //
 // The Glyph is the system's one visible element: a character painted at a
-// point in space at time `born`, which fades from TRAIL brightness to
-// nothing over LIFE seconds, at which point it is gone: nothing draws it,
+// point in space at time `born`, which fades from a brightness of its own,
+// somewhere between TRAIL_MIN and TRAIL_MAX, to nothing over LIFE seconds, at which point it is gone: nothing draws it,
 // nothing keeps it. Whoever painted it chose where in the text it starts;
 // as it fades, every TICK seconds it reads on to the next character. (The
 // droplet's own head is drawn with the same look, at full brightness.)
@@ -71,13 +71,27 @@ struct Glyph {
 };
 
 const LIFE: f32 = 2.6667;        // seconds from painted to gone
-const TRAIL: f32 = 0.5;          // a painted glyph's brightness at birth, which it fades from
+const TRAIL_MIN: f32 = 0.1;      // a painted glyph's brightness at birth is random, between these
+const TRAIL_MAX: f32 = 0.7;
 const TICK: f32 = 0.75;          // seconds between characters as it fades
 const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
-fn glyph_opacity(g: Glyph, t: f32) -> f32 { return TRAIL * clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
+// A random number in 0..1 for an integer, stable from frame to frame.
+fn hash(n: u32) -> f32 {
+  var x = n * 747796405u + 2891336453u;
+  x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+  x = (x >> 22u) ^ x;
+  return f32(x) / 4294967295.0;
+}
+
+// Each glyph's own brightness at birth, from its start and its moment.
+fn glyph_bright(g: Glyph) -> f32 {
+  return mix(TRAIL_MIN, TRAIL_MAX, hash(g.start * 7919u + u32(g.born * 997.0)));
+}
+
+fn glyph_opacity(g: Glyph, t: f32) -> f32 { return glyph_bright(g) * clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
 
 // The character a glyph shows at time t: the text, read on from its start.
 fn glyph_char(g: Glyph, t: f32) -> u32 {

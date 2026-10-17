@@ -63,7 +63,8 @@ screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
 `1 + z` heights tall. Nothing is nearer than z = 0.
 
 **The Glyph** is the one visible element: a character painted at a point
-in space at a moment, at `TRAIL` brightness, fading to nothing over `LIFE`
+in space at a moment, at a brightness of its own between `TRAIL_MIN` and
+`TRAIL_MAX`, fading to nothing over `LIFE`
 seconds and then gone. Whoever painted it chose where in the text it
 starts; as it fades, every `TICK` seconds it reads on to the next character.
 
