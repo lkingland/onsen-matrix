@@ -117,7 +117,7 @@ struct Droplet {
   start: u32,          // its first glyph's place in the text
 };
 
-const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
+const FALL: f32 = 0.0625;        // screen heights per second: 16 seconds top to bottom
 const SPAWN: f32 = 0.5;          // seconds between glyphs
 const RUN: f32 = 1.0 / FALL;     // seconds a droplet lives: top to bottom of the near plane
 const RUN_GLYPHS: u32 = u32(RUN / SPAWN);   // glyphs it paints in that time
