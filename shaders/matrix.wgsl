@@ -73,7 +73,7 @@ const LIFE: f32 = 2.6667;        // seconds from painted to gone
 const FLASH: f32 = 0.12;         // seconds the fresh print stays fully bright
 const AFTER: f32 = 0.5;          // the brightness it drops to after the flash, then fades from
 const TICK: f32 = 0.75;          // seconds between characters as it fades
-const GLYPH_SIZE: f32 = 0.0625;  // a glyph's cell height at the near plane, in screen heights
+const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
@@ -124,7 +124,7 @@ struct Droplet {
   start: u32,          // where in the text it begins reading
 };
 
-const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
+const FALL: f32 = 0.25;          // screen heights per second: 4 seconds top to bottom
 const SPAWN: f32 = 0.25;         // seconds between glyphs
 const MARK: bool = true;         // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
@@ -202,7 +202,7 @@ fn glyph(code: u32, uv: vec2<f32>, cell_px: f32) -> f32 {
 // an aperture grille of red, green and blue stripes and rolling scanlines,
 // the light breathing a little.
 
-const INK: vec3<f32> = vec3<f32>(0.6, 1.0, 0.65);
+const INK: vec3<f32> = vec3<f32>(0.2, 1.0, 0.35);
 const STRIPE_PERIOD: f32 = 6.0;  // scanline spacing, in drawn pixels
 const STRIPE_DEPTH: f32 = 0.55;  // how dark the gap between lines gets, 0..1
 const ROLL: f32 = 18.0;          // scanline roll, in pixels per second
