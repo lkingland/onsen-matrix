@@ -28,7 +28,7 @@ const WALK: f32 = 0.2;           // units per second forward
 const RISE: f32 = 0.0;           // units per second upward
 
 // -------------------------------------------------------------------- rain
-const DROPLETS: usize = 400;     // how many droplets are falling at once
+const DROPLETS: usize = 600;     // how many droplets are falling at once
 const RAIN_NEAR: f32 = 0.3;      // units ahead of the camera
 const RAIN_FAR: f32 = 14.0;      // the furthest, and smallest
 const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
