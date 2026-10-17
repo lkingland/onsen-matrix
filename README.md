@@ -62,14 +62,15 @@ so a thing at depth z appears `1 / (1 + z)` as large and moves across the
 screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
 `1 + z` heights tall. Nothing is nearer than z = 0.
 
-**The Glyph** is the one visible element: a single character painted at a
-point in space at a moment, fully bright, fading to nothing over `LIFE`
-seconds and then gone. It never changes; what it says was decided by whoever
-painted it.
+**The Glyph** is the one visible element: a character painted at a point
+in space at a moment, fully bright, fading to nothing over `LIFE` seconds
+and then gone. Whoever painted it chose where in the text it starts; as it
+fades, every `TICK` seconds it reads on to the next character.
 
 **The Droplet** has no look of its own: a point that falls at `FALL` screen
 heights per second, reading the text. Every `SPAWN` seconds it paints a
-Glyph where it is, pinned there, saying the next character of the gongyō.
+Glyph where it is, pinned there, starting on the next character of the
+gongyō.
 It stops painting at the bottom of the screen at its depth, and the next
 droplet in its column begins, reading on. `MARK` shows a droplet as a red
 dot, for watching.
