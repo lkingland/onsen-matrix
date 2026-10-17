@@ -173,3 +173,35 @@ fn edt1d(f: &[f64], d: &mut [f64], v: &mut [usize], z: &mut [f64]) {
         d[q] = (q as f64 - p as f64).powi(2) + f[p];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn charset_is_distinct_and_in_order_of_first_appearance() {
+        let chars = charset();
+        let set: std::collections::HashSet<_> = chars.iter().collect();
+        assert_eq!(set.len(), chars.len());
+        assert_eq!(chars[0], '方', "chapter 2 opens 方便品第二");
+        assert!(chars.len() <= (COLS * 64) as usize);
+    }
+
+    #[test]
+    fn distance_of_a_disc_is_its_radius_minus_the_distance_from_centre() {
+        let size = 64usize;
+        let (cx, cy, r) = (32.0f32, 32.0f32, 12.0f32);
+        let coverage: Vec<u8> = (0..size * size)
+            .map(|i| {
+                let (x, y) = ((i % size) as f32 + 0.5, (i / size) as f32 + 0.5);
+                if ((x - cx).powi(2) + (y - cy).powi(2)).sqrt() <= r { 255 } else { 0 }
+            })
+            .collect();
+        let sdf = signed_distance(&coverage, size);
+        for &(x, y) in &[(32usize, 32usize), (32, 20), (32, 44), (40, 32), (32, 10), (32, 56), (5, 5)] {
+            let want = r - (((x as f32 + 0.5) - cx).powi(2) + ((y as f32 + 0.5) - cy).powi(2)).sqrt();
+            let got = sdf[y * size + x];
+            assert!((got - want).abs() < 1.2, "at ({x},{y}): want {want}, got {got}");
+        }
+    }
+}
