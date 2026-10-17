@@ -55,12 +55,13 @@ pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Rng(0x2545F491)).insert_resource(View { aspect: 16.0 / 9.0 }).add_systems(Update, (drift, rain, droplets, glyphs).chain());
+        app.insert_resource(Rng(0x2545F491)).add_systems(Update, (drift, rain, droplets, glyphs).chain());
     }
 }
 
 /// The shape of the whole view the cameras see, across every display: its
-/// width over its height. The host sets it when it opens the displays.
+/// width over its height. The host inserts it when it opens the displays;
+/// until then there is no rain.
 #[derive(Resource)]
 pub struct View {
     pub aspect: f32,
@@ -156,9 +157,13 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 }
 
 /// Keeps DROPLETS falling: each one that has gone is replaced by one born
-/// at the top of the box, somewhere in it, reading from a random place.
-fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, view: Res<View>, mut rng: ResMut<Rng>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+/// at the top of the view, somewhere in it, reading from a random place.
+/// The very first fill is spread over the whole height, so the scene starts
+/// full rather than as a line of heads along the top.
+fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, view: Option<Res<View>>, mut rng: ResMut<Rng>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+    let Some(view) = view else { return };
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
+    let first_fill = live.is_empty();
     for _ in live.iter().count()..DROPLETS {
         let ahead = rng.range(RAIN_NEAR, RAIN_FAR);
         // The view at that depth: `ahead` units tall, and as wide as the view's shape makes it.
@@ -167,6 +172,7 @@ fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, view: Res<View
         let x = cam.x + rng.range(-half_w, half_w);
         let z = cam.z - ahead;
         let (top, bottom) = (cam.y + half_h + RAIN_MARGIN, cam.y - half_h - RAIN_MARGIN);
+        let y = if first_fill { rng.range(bottom, top) } else { top };
         let start = (rng.next() * look.text.len() as f32) as usize;
         let head = commands
             .spawn((
@@ -179,7 +185,7 @@ fn rain(mut commands: Commands, time: Res<Time>, look: Res<Look>, view: Res<View
         commands
             .spawn((
                 Droplet { born: time.elapsed_secs(), start, stamped: 0, bottom, head },
-                Transform::from_xyz(x, top, z),
+                Transform::from_xyz(x, y, z),
                 Visibility::default(),
                 Velocity(Vec3::new(0.0, -FALL, 0.0)),
             ))
