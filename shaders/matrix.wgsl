@@ -1,8 +1,25 @@
 // The picture. Edit and save: the running host reloads this file on the next
 // frame. Errors are printed by the host and the previous shader stays up.
 
-// Which character to draw: an ASCII code. 65 is A, 66 is B.
-const LETTER: u32 = 66u;
+// The Droplet: the system's one element. A glyph that, every TICK seconds,
+// becomes a different random character.
+const TICK: f32 = 0.25;          // seconds between character changes
+const FIRST_CHAR: u32 = 33u;     // the pool: printable ASCII, '!' through '~'
+const CHAR_COUNT: u32 = 94u;
+
+// A random number in 0..1 for an integer, stable from frame to frame.
+fn hash(n: u32) -> f32 {
+  var x = n * 747796405u + 2891336453u;
+  x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+  x = (x >> 22u) ^ x;
+  return f32(x) / 4294967295.0;
+}
+
+// The character a droplet with the given seed shows at time t.
+fn droplet_char(seed: u32, t: f32) -> u32 {
+  let tick = u32(floor(t / TICK));
+  return FIRST_CHAR + u32(hash(seed * 7919u + tick) * f32(CHAR_COUNT));
+}
 
 struct Uniforms {
   resolution: vec2<f32>,
@@ -56,6 +73,6 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y;
   let size = 0.25;                       // the character's cell, in screen heights
   let uv = p / size + vec2<f32>(0.5);
-  let ink = glyph(LETTER, uv);
+  let ink = glyph(droplet_char(1u, u.time), uv);
   return vec4<f32>(vec3<f32>(0.6, 1.0, 0.65) * ink, 1.0);
 }
