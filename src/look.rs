@@ -32,6 +32,13 @@ pub struct Look {
     pub text: Vec<u32>,
 }
 
+impl Look {
+    /// The character at a place in the text, which wraps around.
+    pub fn char_at(&self, i: usize) -> u32 {
+        self.text[i % self.text.len()]
+    }
+}
+
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct GlyphMaterial {
     #[texture(0)]
@@ -81,4 +88,21 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut meshes: 
     let material = materials.add(GlyphMaterial { atlas });
     let quad = meshes.add(Rectangle::new(1.0 + 2.0 * AURA_REACH, 1.0 + 2.0 * AURA_REACH));
     commands.insert_resource(Look { material, quad, text: atlas::text_indices() });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tag_packs_character_brightness_and_whiteness() {
+        let t = tag(743, 1.3, 0.2).value;
+        assert_eq!(t & 0x3ff, 743);
+        let bright = ((t >> 10) & 0xff) as f32 / 255.0 * BRIGHT_MAX;
+        assert!((bright - 1.3).abs() < 0.01, "{bright}");
+        let white = ((t >> 18) & 0x3f) as f32 / 63.0;
+        assert!((white - 0.2).abs() < 0.01, "{white}");
+        assert_eq!(tag(0, 0.0, 0.0).value, 0);
+        assert_eq!((tag(0, 99.0, 9.0).value >> 10) & 0xff, 255, "brightness saturates");
+    }
 }

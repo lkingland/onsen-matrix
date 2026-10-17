@@ -21,18 +21,20 @@ into the same scene.
 
 ## The parts
 
-- `src/scene.rs`: the scene. Columns, droplets, glyphs and the camera as
+- `src/scene.rs`: the scene. The rain, droplets, glyphs and the camera as
   entities with transforms and velocities, and the systems that move,
-  stamp, fade and retire them. Every tunable is a named constant at the
-  top.
-- `src/look.rs`: how a glyph looks: a material on a quad, carrying the
-  atlas and, per glyph, its character and brightness.
+  stamp, fade and retire them. The coordinate system is documented at the
+  top, and every tunable is a named constant there.
+- `src/look.rs`: how a glyph looks: one material on one quad, shared by
+  every glyph so they draw as instances; the per-glyph character,
+  brightness and whiteness travel in the instance's tag.
 - `assets/shaders/glyph.wesl`: the material's shader: the tube look and
   the aura. Bevy reloads it when the file changes.
 - `src/atlas.rs`: the glyph atlas. Every character the shader may draw, as
   a signed distance field in a grid of cells, so character `n` is cell `n`.
   Distance fields stay crisp at any size and give glow, blur and outlines by
   thresholding.
+- `src/host.rs`: ending the run on input, snapshots, frame-time logging.
 - `bin/dev`: the iteration loop.
 
 ## Iterating
@@ -47,37 +49,48 @@ the monitor you were on, so the other screens work as usual. Edit
 `target/dev.log` and the previous look stays. Changes to `src/` need
 `bin/dev` again, which rebuilds in a few seconds and restarts.
 `ONSEN_MATRIX_MONITOR=DP-2 bin/dev` picks another output.
-`ONSEN_MATRIX_ATLAS=path` writes the atlas as a PGM at startup.
+`ONSEN_MATRIX_ATLAS=path` writes the atlas as a PGM at startup. Frame
+times are logged to `target/dev.log` every second or so.
 
-## The picture so far
+## The picture so far: the rain, in depth
 
-**Space** is in units, y up, ahead is -z (Bevy's camera looks along -z).
-The camera's field of view is set so that one unit, one unit ahead, spans
-the screen's height. The camera has a velocity: forward at `WALK`, up at
+**Space** is in units, y up, ahead is -z. The camera's field of view is
+set so that one unit, one unit ahead, spans the screen's height. The
+camera starts at the origin and has a velocity: forward at `WALK`, up at
 `RISE`.
 
-**The Glyph** is the one visible element: a quad with the look on it, at a
-point in space, born at a brightness of its own between `TRAIL_MIN` and
-`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`,
-when it is despawned, entity and material both. As it fades, every `TICK`
-seconds it reads on to the next character of the text.
+**The rain** keeps `DROPLETS` droplets falling in a box that moves with the
+camera: `RAIN_WIDTH` across, from `RAIN_NEAR` to `RAIN_FAR` ahead, born
+`RAIN_TOP` above and gone below `RAIN_BOTTOM` or once behind the camera.
+When one goes, another is born somewhere in the box, reading from a random
+place in the text.
 
 **The Droplet** is a point with a velocity, `FALL` units per second down,
 reading the text, carrying its head as a child: a glyph at `HEAD`
 brightness, `HEAD_SIZE` larger, pulled `HEAD_WHITE` toward white, showing
 the character being read. Every `SPAWN` seconds it reads the next
-character and stamps the one it is leaving as a Glyph where it is. At the
-bottom of its column it is despawned.
+character and stamps the one it is leaving as a Glyph where it is.
 
-**A Column** is a place in space, `COLUMNS`, where droplets fall one after
-another, each reading on in the text where the last stopped.
+**The Glyph** is the one visible element: a quad with the look on it, at a
+point in space, born at a brightness of its own between `TRAIL_MIN` and
+`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`,
+when it is despawned. As it fades, every `TICK` seconds it reads on to the
+next character of the text.
 
 **The look** draws a Glyph in three layers: the aura, a wide tinted repeat
 of the character's shape beyond its cell; the tube's glow, the character's
 light scattered and smeared downward; and the tube's core, the character
 sharp. The glow and core sit under an aperture grille of red, green and
 blue stripes and slowly rolling scanlines, the light breathing a little.
-The camera adds Bevy's bloom on top.
+Glyphs are light and blend purely additively, so nothing a glyph draws can
+hide what is behind it; the camera adds Bevy's bloom on top.
+
+## Known
+
+- The window runs at 60 fps on a 120 Hz display with the GPU mostly idle.
+  A layer-shell surface on the same display gets 120, so the cap is in the
+  window path (winit or Hyprland's handling of the fullscreen window), not
+  in the scene. Being chased.
 
 ## Before Bevy
 
