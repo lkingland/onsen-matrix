@@ -125,8 +125,14 @@ struct Droplet {
 
 const FALL: f32 = 0.0625;        // screen heights per second: 16 seconds top to bottom
 const SPAWN: f32 = 1.0;          // seconds between glyphs
-const RUN: f32 = 1.0 / FALL;     // seconds a droplet lives: top to bottom of the near plane
-const RUN_GLYPHS: u32 = u32(RUN / SPAWN);   // glyphs it paints in that time
+
+// The screen is one height tall at the near plane and (CAMERA_DEPTH + z) /
+// CAMERA_DEPTH heights tall at depth z, so a droplet there has further to
+// fall to cross it, at the same speed in space: it looks slower, as it should.
+fn droplet_run(d: Droplet) -> f32 { return (CAMERA_DEPTH + d.origin.z) / CAMERA_DEPTH / FALL; }
+fn droplet_run_glyphs(d: Droplet) -> u32 { return u32(droplet_run(d) / SPAWN); }
+// Where to be born to start at the top of the screen at depth z.
+fn droplet_top(x: f32, z: f32) -> vec3<f32> { return vec3<f32>(x, 0.5 * (CAMERA_DEPTH + z) / CAMERA_DEPTH, z); }
 const MARK: bool = true;         // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
@@ -146,14 +152,14 @@ fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let age = t - d.born;
   if (age < 0.0) { return vec3<f32>(0.0); }
   // The droplet stops painting at the bottom; its glyphs fade on their own.
-  let last = min(u32(floor(age / SPAWN)), RUN_GLYPHS);
+  let last = min(u32(floor(age / SPAWN)), droplet_run_glyphs(d));
   let first = u32(max(ceil((age - LIFE) / SPAWN), 0.0));
   if (first > last) { return vec3<f32>(0.0); }
   var col = vec3<f32>(0.0);
   for (var k = first; k <= last; k++) {
     col += paint(droplet_glyph(d, k), p, px, t);
   }
-  if (MARK && age <= RUN) {
+  if (MARK && age <= droplet_run(d)) {
     let pr = project(droplet_pos(d, t));
     let dist_px = length(p - pr.centre) * u.resolution.y;
     col += vec3<f32>(1.0, 0.3, 0.3) * smoothstep(MARK_PX * 0.5 + 0.7, MARK_PX * 0.5 - 0.7, dist_px);
@@ -253,28 +259,22 @@ const AURA: f32 = 0.45;          // brightness
 const AURA_REACH: f32 = 0.35;    // blur radius, in cell units
 const AURA_TINT: vec3<f32> = vec3<f32>(0.2, 0.9, 0.5);
 
-// The glyph's shape blurred over AURA_REACH. Each tap is itself soft, the
-// distance field ramped over its whole range, and the taps sit close enough
-// to merge: the centre, a ring at half reach and a ring at full reach.
-fn aura_tap(code: u32, uv: vec2<f32>) -> f32 {
-  return smoothstep(0.0, 0.6, glyph_sdf(code, uv));
-}
-
+// The glyph's shape repeated over two rings of taps and the centre, each
+// tap sharp enough to read as a ghost of the character: the first version,
+// and the one that was liked.
 fn aura(code: u32, uv: vec2<f32>) -> vec3<f32> {
-  var acc = 2.0 * aura_tap(code, uv);
+  var acc = 0.0;
   for (var i = 0u; i < 8u; i++) {
     let a = f32(i) * 0.7853982;   // 45 degree steps
-    acc += 1.5 * aura_tap(code, uv + vec2<f32>(cos(a), sin(a)) * AURA_REACH * 0.5);
+    let dir = vec2<f32>(cos(a), sin(a));
+    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH));
+    acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv + dir * AURA_REACH * 0.5));
   }
-  for (var i = 0u; i < 12u; i++) {
-    let a = f32(i) * 0.5235988 + 0.2618;   // 30 degree steps, offset from the inner ring
-    acc += aura_tap(code, uv + vec2<f32>(cos(a), sin(a)) * AURA_REACH);
-  }
-  acc /= 2.0 + 8.0 * 1.5 + 12.0;
+  acc += smoothstep(0.35, 0.65, glyph_sdf(code, uv));
   // Softly to nothing at the reach's edge, so the layer has no border.
   let edge = smoothstep(-AURA_REACH, 0.0, uv.x) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.x)
            * smoothstep(-AURA_REACH, 0.0, uv.y) * smoothstep(-AURA_REACH, 0.0, 1.0 - uv.y);
-  return AURA_TINT * AURA * acc * edge;
+  return AURA_TINT * AURA * (acc / 17.0) * edge;
 }
 
 // The character `code` as seen on the tube, over its cell uv (cell_px pixels
@@ -288,19 +288,33 @@ fn tube(code: u32, uv: vec2<f32>, cell_px: f32, px: vec2<f32>, t: f32) -> vec3<f
 
 // ------------------------------------------------------------------- frame
 
+// A column: droplets born at `top`, one after another from `since`, each
+// reading on in the text from `start`.
+fn column(top: vec3<f32>, start: u32, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+  let probe = Droplet(top, 0.0, 0u);
+  let run = droplet_run(probe);
+  let per = droplet_run_glyphs(probe) + 1u;
+  let n = floor(max(t - u.loaded, 0.0) / run);
+  let now = Droplet(top, u.loaded + n * run, start + u32(n) * per);
+  var col = droplet_paint(now, p, px, t);
+  if (n > 0.0) {
+    let before = Droplet(top, u.loaded + (n - 1.0) * run, start + u32(n - 1.0) * per);
+    col += droplet_paint(before, p, px, t);
+  }
+  return col;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space: the origin in the middle, one unit = screen height, y up.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y * vec2<f32>(1.0, -1.0);
   let px = in.uv * u.resolution;
-  // Droplets fall one after another from the top of the screen in the
-  // middle, as near as anything can be, from the moment this shader was
-  // loaded; each reads on in the text where the last stopped. The previous
-  // one is painted too, for its glyphs still fading.
-  let n = floor(max(u.time - u.loaded, 0.0) / RUN);
-  let now = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded + n * RUN, u32(n) * (RUN_GLYPHS + 1u));
-  let before = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded + (n - 1.0) * RUN, u32(max(n - 1.0, 0.0)) * (RUN_GLYPHS + 1u));
-  var col = droplet_paint(now, p, px, u.time);
-  if (n > 0.0) { col = min(col + droplet_paint(before, p, px, u.time), vec3<f32>(1.0)); }
+  // Columns fall one droplet after another from the moment this shader was
+  // loaded: one at the near plane, and one some distance away, which falls
+  // the same speed in space and so looks slower and smaller. The previous
+  // droplet of each is painted too, for its glyphs still fading.
+  var col = column(droplet_top(0.0, 0.0), 0u, p, px, u.time);
+  col += column(droplet_top(0.9, 2.0), 1000u, p, px, u.time);
+  col = min(col, vec3<f32>(1.0));
   return vec4<f32>(col, 1.0);
 }
