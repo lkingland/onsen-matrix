@@ -1,25 +1,31 @@
 #!/bin/bash
 # The iteration loop: builds, then holds the picture on one output until
-# `bin/dev stop`. Edit shaders/matrix.wgsl and save; the picture follows.
-# Edit src/ and run `bin/dev` again; it rebuilds and restarts.
+# `bin/dev stop`. Edit assets/shaders/glyph.wesl and save; the picture
+# follows. Edit src/ and run `bin/dev` again; it rebuilds and restarts.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 monitor=${ONSEN_MATRIX_MONITOR:-HDMI-A-1}
-height=${ONSEN_MATRIX_HEIGHT:-1440}
 case ${1:-} in
   stop) pkill -x onsen-matrix || true; exit 0 ;;
   snap)
-    # Asks the running host for the current frame, written as PNG to $2
-    # (default target/snap.png). This is the host's own frame, not a screen
-    # capture, so it shows exactly what was drawn.
-    out=${2:-$root/target/snap.png}; ppm=$root/target/snap.ppm
-    rm -f "$ppm"; echo "$ppm" > "$root/target/snap.request"
-    for _ in $(seq 50); do [[ -f $ppm ]] && break; sleep 0.05; done
-    [[ -f $ppm ]] || { echo "no snapshot: is the host running?" >&2; exit 1; }
-    magick "$ppm" "$out" && rm -f "$ppm" && echo "$out"; exit 0 ;;
+    # Asks the running app for the current frame, written as PNG to $2
+    # (default target/snap.png).
+    out=${2:-$root/target/snap.png}
+    rm -f "$out"; echo "$out" > "$root/target/snap.request"
+    # The file appears before it is fully written: wait until it reads as an image.
+    for _ in $(seq 80); do [[ -f $out ]] && magick identify "$out" >/dev/null 2>&1 && break; sleep 0.05; done
+    magick identify "$out" >/dev/null 2>&1 || { echo "no snapshot: is the app running?" >&2; exit 1; }
+    echo "$out"; exit 0 ;;
 esac
 cd "$root" && cargo build --release 2>&1 | grep -E "^(error|warning)|-->|Finished" || true
 pkill -x onsen-matrix || true; sleep 0.2
 rm -f "$root/target/snap.request"
-setsid -f bash -c "ONSEN_MATRIX_SNAP='$root/target/snap.request' exec '$root/target/release/onsen-matrix' --output '$monitor' --height '$height' --hold >> '$root/target/dev.log' 2>&1"
+# A window maps on the focused monitor: focus the test bed, launch, then
+# give focus back to where it was.
+was=$(hyprctl monitors -j | python3 -I -c 'import json,sys; print([m["name"] for m in json.load(sys.stdin) if m["focused"]][0])')
+hyprctl dispatch "hl.dsp.focus({ monitor = \"$monitor\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$monitor" >/dev/null
+setsid -f bash -c "ONSEN_MATRIX_SNAP='$root/target/snap.request' exec '$root/target/release/onsen-matrix' --hold >> '$root/target/dev.log' 2>&1"
+for _ in $(seq 100); do hyprctl clients -j | grep -q '"class": "onsen-matrix"' && break; sleep 0.1; done
+sleep 0.3
+hyprctl dispatch "hl.dsp.focus({ monitor = \"$was\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$was" >/dev/null
 echo "holding $monitor; log: target/dev.log; stop with: bin/dev stop"

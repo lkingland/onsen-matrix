@@ -35,9 +35,8 @@ pub fn text_indices() -> Vec<u32> {
     TEXT.chars().map(|c| index[&c]).collect()
 }
 
-/// Builds the atlas and uploads it as an R8 texture. Returns the view and
-/// the grid's row count.
-pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, u32) {
+/// Builds the atlas: one byte per pixel, and its width and height.
+pub fn build() -> (Vec<u8>, u32, u32) {
     let chars = charset();
     let rows = (chars.len() as u32).div_ceil(COLS);
     let (w, h) = (COLS * CELL, rows * CELL);
@@ -81,24 +80,9 @@ pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView,
         out.extend_from_slice(&pixels);
         std::fs::write(&path, out).expect("the atlas dump");
     }
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("atlas"),
-        size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-        &pixels,
-        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w), rows_per_image: Some(h) },
-        wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-    );
-    (texture.create_view(&Default::default()), rows)
+    (pixels, w, h)
 }
+
 /// Signed distance to the edge of the shape whose coverage is given, in
 /// pixels, positive inside. The edge is taken at half coverage; the
 /// antialiased coverage of edge pixels refines the distance by a fraction.

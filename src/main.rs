@@ -1,48 +1,47 @@
-//! onsen-matrix: a screensaver that owns each output through a layer-shell
-//! overlay surface and draws it with wgpu.
+//! onsen-matrix: a screensaver, as a Bevy scene.
 //!
-//! The host (this program) does the fixed work: surfaces, the GPU, input,
-//! frame pacing, the glyph atlas. The picture is `shaders/matrix.wgsl`,
-//! reloaded whenever the file changes, so it can be iterated on without a
-//! restart. Any key or pointer movement ends the run, unless `--hold`.
+//! The scene is small and high level. A Glyph is a quad with the tube look
+//! on it, at a point in space. A Droplet is a point with a velocity that
+//! carries a bright head glyph and stamps glyphs behind it as it reads the
+//! text. A Column is a place in space where droplets fall one after
+//! another. The camera has a velocity too. Bevy does the rest: transforms,
+//! projection, batching, bloom.
+//!
+//! The look is `assets/shaders/glyph.wesl`, hot-reloaded on save.
 
-mod app;
 mod atlas;
-mod gpu;
+mod look;
+mod scene;
 
-use std::path::PathBuf;
+use bevy::prelude::*;
+use bevy::window::{MonitorSelection, PresentMode, WindowMode};
 
 /// The command line.
+#[derive(Resource, Clone)]
 pub struct Args {
-    /// `--output NAME`: only this output (e.g. HDMI-A-1); all of them otherwise.
-    pub output: Option<String>,
-    /// `--hold`: never end on input, and take no keyboard, so the other
-    /// screens stay usable while this one holds the picture.
+    /// `--hold`: never end on input, for iterating.
     pub hold: bool,
-    /// `--height N`: lines drawn per output, scaled up by the compositor to
-    /// fill it; 0 draws every output pixel. Default 1440.
-    pub height: u32,
-    /// `--shader PATH`: the picture. Default `shaders/matrix.wgsl` in the source tree.
-    pub shader: PathBuf,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
-    /// written to the file it names (as PPM) and the request removed.
-    pub snap: Option<PathBuf>,
-}
-
-impl Args {
-    fn parse() -> Self {
-        let value = |name: &str| std::env::args().skip_while(|a| a != name).nth(1);
-        Args {
-            output: value("--output"),
-            hold: std::env::args().any(|a| a == "--hold"),
-            height: value("--height").and_then(|h| h.parse().ok()).unwrap_or(1440),
-            shader: value("--shader").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders/matrix.wgsl")),
-            snap: std::env::var("ONSEN_MATRIX_SNAP").ok().map(PathBuf::from),
-        }
-    }
+    /// written to the file it names (PNG) and the request removed.
+    pub snap: Option<std::path::PathBuf>,
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("onsen_matrix=info")).init();
-    app::run(Args::parse());
+    let args = Args { hold: std::env::args().any(|a| a == "--hold"), snap: std::env::var("ONSEN_MATRIX_SNAP").ok().map(Into::into) };
+    App::new()
+        .insert_resource(args)
+        .insert_resource(ClearColor(Color::BLACK))
+        .add_plugins(DefaultPlugins.set(AssetPlugin { file_path: concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into(), ..default() }).set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "onsen-matrix".into(),
+                name: Some("onsen-matrix".into()),
+                mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+                present_mode: PresentMode::AutoVsync,
+                decorations: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins((look::LookPlugin, scene::ScenePlugin))
+        .run();
 }
