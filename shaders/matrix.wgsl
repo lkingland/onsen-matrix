@@ -113,6 +113,9 @@ const SMEAR_GAIN: f32 = 0.9;     // the smear's brightness relative to the body
 const EDGE_BLUR: f32 = 0.13;     // edge softness, in SDF units
 const SCATTER: f32 = 0.8;        // halo strength
 const SCATTER_REACH: f32 = 0.3;  // halo reach, in SDF units
+const CORE: f32 = 0.85;          // the crisp foreground glyph's brightness
+const CORE_GRILLE: f32 = 0.5;    // how much the grille shows through the core, 0 none, 1 full
+const BACK: f32 = 0.7;           // the scattered background layer's brightness
 
 fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let inside = fade(uv);
@@ -135,12 +138,30 @@ fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   return light * mask * GRILLE_GAIN * breathe * inside * (1.0 - STRIPE_DEPTH * (1.0 - line));
 }
 
+// The crisp foreground: the glyph's edge sharp, with the grille showing
+// through only partly and the scanlines rolling across it.
+fn core(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+  let ink = glyph(code, uv);
+  let sub = u32(floor(px.x / GRILLE_PITCH)) % 3u;
+  var mask = vec3<f32>(GRILLE_FLOOR);
+  if (sub == 0u) { mask.r = 1.0; } else if (sub == 1u) { mask.g = 1.0; } else { mask.b = 1.0; }
+  mask = mix(vec3<f32>(1.0), mask * GRILLE_GAIN, CORE_GRILLE);
+  let phase = fract((px.y + t * ROLL) / STRIPE_PERIOD);
+  let line = 0.5 + 0.5 * cos(phase * 6.2831853);
+  return INK * ink * mask * (1.0 - STRIPE_DEPTH * (1.0 - line));
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space with the origin in the middle, one unit = screen height.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y;
   let size = 0.25;                       // the character's cell, in screen heights
   let uv = p / size + vec2<f32>(0.5);
-  let col = tube(droplet_char(1u, u.time), uv, in.uv * u.resolution, u.time);
-  return vec4<f32>(col, 1.0);
+  let code = droplet_char(1u, u.time);
+  let px = in.uv * u.resolution;
+  // The composite: the scattered tube behind, the crisp core in front.
+  let back = BACK * tube(code, uv, px, u.time);
+  let front = CORE * core(code, uv, px, u.time);
+  let col = back + front;
+  return vec4<f32>(min(col, vec3<f32>(1.0)), 1.0);
 }
