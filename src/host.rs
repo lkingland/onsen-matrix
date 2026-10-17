@@ -28,7 +28,7 @@ pub struct HostPlugin;
 impl Plugin for HostPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((FrameTimeDiagnosticsPlugin::default(), LogDiagnosticsPlugin::default()))
-            .add_systems(Update, (open_displays, end_on_input, snapshot))
+            .add_systems(Update, (open_displays, take_focus, end_on_input, snapshot))
             .add_systems(Last, pace);
     }
 }
@@ -106,6 +106,26 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
     }
 }
 
+/// Keys reach only the focused window, and a window opened from a script
+/// does not get focus on Hyprland, so ask for it once the windows are up,
+/// the way Omarchy's own screensaver launcher does. Not when holding, so
+/// the loop does not steal the keyboard.
+fn take_focus(args: Res<Args>, canvas: Option<Res<Canvas>>, mut done: Local<bool>, mut frames: Local<u32>) {
+    if args.hold || *done || canvas.is_none() {
+        return;
+    }
+    // A few frames in, so the windows have mapped.
+    *frames += 1;
+    if *frames < 30 {
+        return;
+    }
+    *done = true;
+    let dispatch = |cmd: &str| std::process::Command::new("hyprctl").args(["dispatch", cmd]).output();
+    if dispatch("hl.dsp.focus({ window = \"class:^(onsen-matrix)$\" })").map(|o| !o.status.success() || String::from_utf8_lossy(&o.stdout).contains("Invalid")).unwrap_or(true) {
+        let _ = dispatch("focuswindow class:^(onsen-matrix)$");
+    }
+}
+
 /// Holds the frame rate at --fps by sleeping out the rest of each frame,
 /// when a rate is asked for. Vsync still applies on top.
 fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
@@ -128,8 +148,16 @@ fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
 /// Any key, click, wheel or pointer movement ends the run, unless --hold.
 fn end_on_input(args: Res<Args>, mut keys: MessageReader<KeyboardInput>, mut buttons: MessageReader<MouseButtonInput>, mut wheel: MessageReader<MouseWheel>, mut motion: MessageReader<MouseMotion>, mut drifted: Local<Vec2>, mut exit: MessageWriter<AppExit>) {
     *drifted += motion.read().map(|m| m.delta).sum::<Vec2>();
-    let any = keys.read().count() > 0 || buttons.read().count() > 0 || wheel.read().count() > 0 || drifted.length() > POINTER_SLACK;
-    if any && !args.hold {
+    let key = keys.read().next().map(|k| format!("key {:?}", k.key_code));
+    let why = key
+        .or_else(|| buttons.read().next().map(|b| format!("button {:?}", b.button)))
+        .or_else(|| wheel.read().next().map(|_| "wheel".to_string()))
+        .or_else(|| (drifted.length() > POINTER_SLACK).then(|| format!("pointer moved {:.0} px", drifted.length())));
+    if let Some(why) = why {
+        if args.hold {
+            return;
+        }
+        info!("ending: {why}");
         exit.write(AppExit::Success);
     }
 }

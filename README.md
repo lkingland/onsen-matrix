@@ -23,14 +23,17 @@ movement ends the run (`--hold` disables that, for iterating).
 
 ## The parts
 
-- `src/scene.rs`: the scene. The rain, droplets, glyphs and the camera as
-  entities with transforms and velocities, and the systems that move,
-  stamp, fade and retire them. The coordinate system is documented at the
-  top, and every tunable is a named constant there.
-- `src/look.rs`: how a glyph looks: one material on one quad, shared by
-  every glyph so they draw as instances; the per-glyph character,
-  brightness and whiteness travel in the instance's tag.
-- `assets/shaders/glyph.wesl`: the material's shader: the tube look and
+- `src/scene.rs`: the scene. The rain, the droplets and the camera as
+  entities with transforms and velocities, and the systems that move them,
+  stamp glyphs and retire droplets. The coordinate system is documented at
+  the top, and every tunable is a named constant there.
+- `src/look.rs`: how glyphs are drawn, all at once. Every glyph is a
+  record in one storage buffer, and one mesh holds a quad per record, so
+  the whole rain is one draw with one material. The CPU writes a record
+  only when a droplet stamps or moves its head.
+- `assets/shaders/glyph.wesl`: the material's shader. The vertex shader
+  places each quad from its record and the clock, working out its fade and
+  which character it shows; the fragment shader draws the tube look and
   the aura. Bevy reloads it when the file changes.
 - `src/atlas.rs`: the glyph atlas. Every character the shader may draw, as
   a signed distance field in a grid of cells, so character `n` is cell `n`.
@@ -76,9 +79,10 @@ character and stamps the one it is leaving as a Glyph where it is.
 
 **The Glyph** is the one visible element: a quad with the look on it, at a
 point in space, born at a brightness of its own between `TRAIL_MIN` and
-`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`,
-when it is despawned. As it fades, every `TICK` seconds it reads on to the
-next character of the text.
+`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`.
+As it fades, every `TICK` seconds it reads on to the next character of the
+text. It is a record in the rain's buffer; the GPU draws it from the clock,
+and its droplet's block of records is reused once its trail has faded.
 
 **The look** draws a Glyph in three layers: the aura, a wide tinted repeat
 of the character's shape beyond its cell; the tube's glow, the character's
@@ -88,6 +92,14 @@ blue stripes and slowly rolling scanlines, the light breathing a little.
 Glyphs are light and blend purely additively, so nothing a glyph draws can
 hide what is behind it; the camera adds Bevy's bloom on top.
 
+## Performance
+
+1200 droplets on two 4K displays at 120 fps take about 60% of the GPU and
+60% of one core; `--fps 60` halves both. The CPU cost is the droplets
+(1200 entities) and one buffer upload a frame; the GPU cost is the
+fragments, which scale with the glyphs' area on screen, so density and
+glyph size are the levers.
+
 ## Known
 
 - Hyprland gives a window on an unfocused monitor 60 fps; the same window
@@ -95,7 +107,7 @@ hide what is behind it; the camera adds Bevy's bloom on top.
   your monitor, so it always shows 60. In use the screensaver's windows
   hold focus. Accepted. `ONSEN_MATRIX_PRESENT=novsync|immediate|mailbox`,
   `ONSEN_MATRIX_LATENCY=N` and `ONSEN_MATRIX_WINDOWED=1` exist for pacing
-  experiments.
+  experiments, and `--fps N` holds a rate.
 
 ## Before Bevy
 
