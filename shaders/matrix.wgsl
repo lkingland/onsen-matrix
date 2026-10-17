@@ -126,6 +126,8 @@ struct Droplet {
 
 const FALL: f32 = 0.25;          // screen heights per second: 4 seconds top to bottom
 const SPAWN: f32 = 0.25;         // seconds between glyphs
+const HEAD: f32 = 1.3;           // the head's brightness, over the full brightness of a fresh glyph
+const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward white
 const MARK: bool = false;        // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
@@ -165,7 +167,8 @@ fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   // latest stamp, at full brightness, until it reaches the bottom.
   if (age <= droplet_run(d)) {
     let head = Glyph(droplet_pos(d, t), GLYPH_SIZE, t, d.start + last + 1u);
-    col += paint_at(head, p, px, t, 1.0);
+    let light = paint_at(head, p, px, t, HEAD);
+    col += mix(light, vec3<f32>(max(max(light.r, light.g), light.b)), HEAD_WHITE);
   }
   if (MARK && age <= droplet_run(d)) {
     let pr = project(droplet_pos(d, t));
