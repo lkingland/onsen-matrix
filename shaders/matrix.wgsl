@@ -59,8 +59,8 @@ fn hash(n: u32) -> f32 {
 // forward along +z at WALK units per second, and up at RISE.
 
 const CAMERA_DEPTH: f32 = 1.0;
-const WALK: f32 = 0.05;          // units per second forward
-const RISE: f32 = 0.012;         // units per second upward
+const WALK: f32 = 0.2;           // units per second forward
+const RISE: f32 = 0.0;           // units per second upward
 
 fn camera() -> vec3<f32> {
   let since = max(u.time - u.loaded, 0.0);
@@ -243,7 +243,7 @@ struct Column {
 };
 
 const COLUMNS: array<Column, 1> = array<Column, 1>(
-  Column(0.0, 2.0, 0u),       // two units ahead of where the camera starts
+  Column(0.5, 3.0, 0u),       // three units ahead of where the camera starts, half a unit to the right
 );
 
 // A column's light: its current droplet, and the previous one for its
