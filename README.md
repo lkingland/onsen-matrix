@@ -8,16 +8,18 @@ built up one small requirement at a time; the aim is a true
 three-dimensional rain of characters across three 4K displays, nearer the
 film than any "matrix" screensaver so far.
 
-## How it owns the display
+## How it owns the displays
 
-A Bevy window, borderless fullscreen, with the app id `onsen-matrix`. On
-Hyprland a window maps on the focused monitor, so the launcher focuses the
-monitor it wants first, the way Omarchy's own screensaver launcher does.
-Any key, click, wheel or pointer movement ends the run (`--hold` disables
-that, for iterating). Three displays will be three windows, each a camera
-into the same scene.
+All the displays are one canvas. The canvas is an image as wide as every
+chosen display side by side and as tall as the tallest, and the scene is
+rendered into it once per frame by one camera, bloom and all, so the
+displays show one picture with no seam. Each display gets a borderless
+fullscreen Bevy window, placed on its monitor by name, showing its own
+slice of the canvas scaled to fill it. Any key, click, wheel or pointer
+movement ends the run (`--hold` disables that, for iterating).
 
-    cargo run --release
+    cargo run --release                              every display
+    cargo run --release -- --outputs HDMI-A-1,DP-3   these displays, left to right by position
 
 ## The parts
 
@@ -34,7 +36,8 @@ into the same scene.
   a signed distance field in a grid of cells, so character `n` is cell `n`.
   Distance fields stay crisp at any size and give glow, blur and outlines by
   thresholding.
-- `src/host.rs`: ending the run on input, snapshots, frame-time logging.
+- `src/host.rs`: the canvas and the displays, ending the run on input,
+  snapshots, frame-time logging.
 - `bin/dev`: the iteration loop.
 
 ## Iterating
@@ -55,9 +58,9 @@ times are logged to `target/dev.log` every second or so.
 ## The picture so far: the rain, in depth
 
 **Space** is in units, y up, ahead is -z. The camera's field of view is
-set so that one unit, one unit ahead, spans the screen's height. The
-camera starts at the origin and has a velocity: forward at `WALK`, up at
-`RISE`.
+set so that one unit, one unit ahead, spans the canvas's height, however
+many displays wide the canvas is. The camera starts at the origin and has
+a velocity: forward at `WALK`, up at `RISE`.
 
 **The rain** keeps `DROPLETS` droplets falling in the camera's view: from
 `RAIN_NEAR` to `RAIN_FAR` ahead, and at each depth as wide as the view is

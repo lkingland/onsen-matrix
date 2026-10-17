@@ -8,6 +8,7 @@ bevy = { version = "0.20", default-features = false, features = [
   "bevy_window", "bevy_winit", "wayland", "bevy_render", "bevy_core_pipeline",
   "bevy_pbr", "bevy_asset", "file_watcher", "multi_threaded", "bevy_log",
   "bevy_post_process", "tonemapping_luts", "ktx2", "zstd_rust", "std", "async_executor", "png",
+  "bevy_sprite", "bevy_sprite_render",
 ] }
 fontdue = "0.9.4"
 log = "0.4"

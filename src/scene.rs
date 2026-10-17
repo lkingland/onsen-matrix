@@ -17,7 +17,7 @@
 //!
 //! Every tunable is a named constant below.
 
-use bevy::camera::{RenderTarget, SubCameraView};
+use bevy::camera::RenderTarget;
 use bevy::mesh::MeshTag;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
@@ -71,9 +71,8 @@ pub struct View {
 #[derive(Component, Clone, Copy)]
 pub struct Velocity(pub Vec3);
 
-/// A camera into the scene, which the rain follows. Every display gets one;
-/// they share one position and velocity, each seeing its own slice of the
-/// view (`SubCameraView`), so the displays are windows onto one space.
+/// The camera into the scene, which the rain follows. There is one; it
+/// renders the whole view into the host's canvas.
 #[derive(Component)]
 pub struct Walker;
 
@@ -131,12 +130,12 @@ fn fade(bright: f32, age: f32) -> f32 {
     bright * (-DECAY * a).exp().max(FLOOR) * (1.0 - a)
 }
 
-/// A camera rendering to `target`, seeing `view` of the whole picture. The
-/// field of view makes one unit, one unit ahead, span the picture's height.
-pub fn spawn_camera(commands: &mut Commands, target: RenderTarget, view: Option<SubCameraView>) {
+/// The camera, rendering to `target` before anything else. The field of
+/// view makes one unit, one unit ahead, span the picture's height.
+pub fn spawn_camera(commands: &mut Commands, target: RenderTarget) {
     commands.spawn((
         Camera3d::default(),
-        Camera { sub_camera_view: view, ..default() },
+        Camera { order: -1, ..default() },
         target,
         Projection::Perspective(PerspectiveProjection { fov: 2.0 * (0.5f32).atan(), near: 0.01, ..default() }),
         Transform::from_xyz(0.0, 0.0, 0.0),
