@@ -55,14 +55,16 @@ fn hash(n: u32) -> f32 {
 // the window the screen shows at depth z is (CAMERA_DEPTH + z) /
 // CAMERA_DEPTH heights tall. Whatever is behind the glass is not drawn.
 //
-// The camera starts at the origin when the shader loads, and walks slowly
-// forward along +z at WALK units per second.
+// The camera starts at the origin when the shader loads, and moves slowly:
+// forward along +z at WALK units per second, and up at RISE.
 
 const CAMERA_DEPTH: f32 = 1.0;
 const WALK: f32 = 0.05;          // units per second forward
+const RISE: f32 = 0.012;         // units per second upward
 
 fn camera() -> vec3<f32> {
-  return vec3<f32>(0.0, 0.0, WALK * max(u.time - u.loaded, 0.0));
+  let since = max(u.time - u.loaded, 0.0);
+  return vec3<f32>(0.0, RISE * since, WALK * since);
 }
 
 struct Projected {

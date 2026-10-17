@@ -64,7 +64,8 @@ glass looking straight in, so a thing z beyond the glass appears
 `1 / (1 + z)` as large and moves across the screen `1 / (1 + z)` as fast,
 and the window the screen shows at depth z is `1 + z` heights tall.
 Whatever is behind the glass is not drawn. The camera starts at the origin
-when the shader loads and walks forward at `WALK` units per second.
+when the shader loads and moves forward at `WALK` units per second and
+upward at `RISE`.
 
 **The Glyph** is the one visible element: a character painted at a point
 in space at a moment, at a brightness of its own between `TRAIL_MIN` and
