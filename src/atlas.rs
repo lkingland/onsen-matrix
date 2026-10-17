@@ -1,7 +1,11 @@
 //! The glyph atlas: one texture holding every character the shader may draw,
 //! in a grid of equal cells, so a shader can show character `n` by sampling
-//! cell `n`. Cells 0..128 are ASCII by codepoint; the shader reaches `A` as
-//! 65. Kana and kanji will follow in later cells.
+//! cell `n`. The characters are those of the Lotus Sutra (Kumārajīva's
+//! 妙法蓮華經, Taishō 262, from the CBETA text). Those of chapters 2 and 16,
+//! the Hōben and Juryō chapters recited in Nichiren Shoshu gongyō
+//! (`assets/lotus-gongyo.txt`), come first in order of first appearance,
+//! then the rest of the sutra (`assets/lotus-sutra.txt`), so a pool of the
+//! first N characters is the gongyō's and the text can be streamed by index.
 //!
 //! Each cell holds a signed distance field, not a picture: a texel's value
 //! is its distance to the glyph's edge, inside positive, scaled so 0.5 is
@@ -12,30 +16,40 @@
 
 use fontdue::{Font, FontSettings};
 
-pub const COLS: u32 = 16;
-pub const ROWS: u32 = 8;
-pub const CELL: u32 = 256;
+pub const COLS: u32 = 64;
+pub const CELL: u32 = 128;
 /// Pixels of the cell that the distance range covers on either side of the edge.
-pub const SPREAD: f32 = 40.0;
+pub const SPREAD: f32 = 20.0;
 
-const FONT: &str = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf";
+const FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
+const TEXT: &str = include_str!("../assets/lotus-sutra.txt");
+const GONGYO: &str = include_str!("../assets/lotus-gongyo.txt");
 
-/// Builds the atlas and uploads it as an R8 texture.
-pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
-    let (w, h) = (COLS * CELL, ROWS * CELL);
+/// The characters, in order of first appearance.
+pub fn charset() -> Vec<char> {
+    let mut seen = std::collections::HashSet::new();
+    GONGYO.chars().chain(TEXT.chars()).filter(|c| seen.insert(*c)).collect()
+}
+
+/// Builds the atlas and uploads it as an R8 texture. Returns the view and
+/// the grid's row count.
+pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::TextureView, u32) {
+    let chars = charset();
+    let rows = (chars.len() as u32).div_ceil(COLS);
+    let (w, h) = (COLS * CELL, rows * CELL);
     let mut pixels = vec![0u8; (w * h) as usize];
     let data = std::fs::read(FONT).expect("the atlas font");
-    let font = Font::from_bytes(data, FontSettings::default()).expect("a parseable font");
-    let px = CELL as f32 * 0.78;
-    let baseline = (CELL as f32 * 0.76) as i32;
+    let font = Font::from_bytes(data, FontSettings { collection_index: 0, ..Default::default() }).expect("a parseable font");
+    let px = CELL as f32 * 0.8;
     let n = (CELL * CELL) as usize;
     let mut coverage = vec![0u8; n];
-    for code in 32u32..127 {
-        let ch = char::from_u32(code).unwrap();
+    let started = std::time::Instant::now();
+    for (i, &ch) in chars.iter().enumerate() {
         let (m, bitmap) = font.rasterize(ch, px);
         coverage.fill(0);
-        let left = ((CELL as f32 - m.advance_width) * 0.5) as i32 + m.xmin;
-        let top = baseline - (m.ymin + m.height as i32);
+        // Centre the glyph's box in the cell, both ways.
+        let left = (CELL as i32 - m.width as i32) / 2;
+        let top = (CELL as i32 - m.height as i32) / 2;
         for row in 0..m.height as i32 {
             for col in 0..m.width as i32 {
                 let (x, y) = (left + col, top + row);
@@ -46,8 +60,8 @@ pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
             }
         }
         let sdf = signed_distance(&coverage, CELL as usize);
-        let cx = (code % COLS) * CELL;
-        let cy = (code / COLS) * CELL;
+        let cx = (i as u32 % COLS) * CELL;
+        let cy = (i as u32 / COLS) * CELL;
         for y in 0..CELL {
             for x in 0..CELL {
                 let d = sdf[(y * CELL + x) as usize];
@@ -56,6 +70,8 @@ pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
             }
         }
     }
+    let gongyo = { let mut seen = std::collections::HashSet::new(); GONGYO.chars().filter(|c| seen.insert(*c)).count() };
+    log::info!("atlas: {} characters ({gongyo} of chapters 2 and 16 first), {w}x{h}, built in {:.2}s", chars.len(), started.elapsed().as_secs_f32());
     // ONSEN_MATRIX_ATLAS=path writes the atlas as a PGM, to look at it.
     if let Ok(path) = std::env::var("ONSEN_MATRIX_ATLAS") {
         let mut out = format!("P5\n{w} {h}\n255\n").into_bytes();
@@ -78,9 +94,8 @@ pub fn upload(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
         wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w), rows_per_image: Some(h) },
         wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
     );
-    texture.create_view(&Default::default())
+    (texture.create_view(&Default::default()), rows)
 }
-
 /// Signed distance to the edge of the shape whose coverage is given, in
 /// pixels, positive inside. The edge is taken at half coverage; the
 /// antialiased coverage of edge pixels refines the distance by a fraction.

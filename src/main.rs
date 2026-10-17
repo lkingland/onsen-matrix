@@ -234,7 +234,8 @@ impl App {
                     },
                 ],
             });
-            let atlas_view = atlas::upload(&device, &queue);
+            let (atlas_view, atlas_rows) = atlas::upload(&device, &queue);
+            log::info!("atlas grid: {}x{atlas_rows}", atlas::COLS);
             let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("atlas"),
                 mag_filter: wgpu::FilterMode::Linear,

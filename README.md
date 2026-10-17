@@ -21,3 +21,14 @@ another output; `ONSEN_MATRIX_HEIGHT=2160 bin/dev` draws at another size (the
 default is 1440 lines per output, scaled up by the compositor; `--height 0`
 draws every output pixel).
     bin/dev snap       write the current frame to target/snap.png (the host's own frame, not a screen capture)
+
+## The characters
+
+`assets/lotus-sutra.txt` is the running text of the Lotus Sutra in
+Kumārajīva's Chinese (妙法蓮華經, Taishō 262), taken from the CBETA edition's
+TEI XML with headings, notes and variant readings stripped, starting at
+如是我聞. `assets/lotus-gongyo.txt` is chapters 2 and 16 of it, Hōben and
+Juryō, the chapters recited in Nichiren Shoshu gongyō. The atlas numbers the
+gongyō's characters first, in order of first appearance, then the rest of the
+sutra, so the shader's pool of the first `GONGYO_CHARS` is the liturgy. To
+use another text, replace either file and rebuild.

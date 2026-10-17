@@ -4,10 +4,14 @@
 // The Droplet: the system's one element. A glyph that, every TICK seconds,
 // becomes a different random character.
 const CYCLE: bool = false;       // false holds STILL_CHAR; true cycles every TICK
-const STILL_CHAR: u32 = 66u;     // B
+const STILL_CHAR: u32 = 0u;      // 方, the first character of 方便品第二 (妙 is 159)
 const TICK: f32 = 0.75;          // seconds between character changes
-const FIRST_CHAR: u32 = 33u;     // the pool: printable ASCII, '!' through '~'
-const CHAR_COUNT: u32 = 94u;
+// The pool. The atlas puts the characters of chapters 2 and 16 (Hōben and
+// Juryō) first, GONGYO_CHARS of them, then the rest of the sutra, SUTRA_CHARS in all.
+const GONGYO_CHARS: u32 = 744u;
+const SUTRA_CHARS: u32 = 1843u;
+const FIRST_CHAR: u32 = 0u;
+const CHAR_COUNT: u32 = GONGYO_CHARS;
 
 // A random number in 0..1 for an integer, stable from frame to frame.
 fn hash(n: u32) -> f32 {
@@ -33,13 +37,13 @@ struct Uniforms {
 @group(0) @binding(1) var atlas: texture_2d<f32>;
 @group(0) @binding(2) var atlas_sampler: sampler;
 
-const ATLAS_COLS: f32 = 16.0;
-const ATLAS_ROWS: f32 = 8.0;
+const ATLAS_COLS: f32 = 64.0;
+const ATLAS_ROWS: f32 = 29.0;
 
 // The signed distance field of character `code` at `uv` (0..1 across its
 // cell, y down): 0.5 at the edge, above inside, below outside.
 fn glyph_sdf(code: u32, uv: vec2<f32>) -> f32 {
-  let cell = vec2<f32>(f32(code % 16u), f32(code / 16u));
+  let cell = vec2<f32>(f32(code % 64u), f32(code / 64u));
   let cuv = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
   return textureSample(atlas, atlas_sampler, (cell + cuv) / vec2<f32>(ATLAS_COLS, ATLAS_ROWS)).r;
 }
