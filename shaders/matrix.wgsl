@@ -69,7 +69,7 @@ struct Glyph {
   start: u32,       // its first character's place in the text
 };
 
-const LIFE: f32 = 4.0;           // seconds from painted to gone
+const LIFE: f32 = 2.6667;        // seconds from painted to gone (fades half again as fast as 4 s)
 const TICK: f32 = 0.75;          // seconds between characters
 const GLYPH_SIZE: f32 = 0.0625;  // a glyph's cell height at the near plane, in screen heights
 
