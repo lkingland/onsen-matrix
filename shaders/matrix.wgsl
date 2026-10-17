@@ -119,6 +119,8 @@ struct Droplet {
 
 const FALL: f32 = 0.125;         // screen heights per second: 8 seconds top to bottom
 const SPAWN: f32 = 0.5;          // seconds between glyphs
+const RUN: f32 = 1.0 / FALL;     // seconds a droplet lives: top to bottom of the near plane
+const RUN_GLYPHS: u32 = u32(RUN / SPAWN);   // glyphs it paints in that time
 const MARK: bool = true;         // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
@@ -137,13 +139,15 @@ fn droplet_glyph(d: Droplet, k: u32) -> Glyph {
 fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let age = t - d.born;
   if (age < 0.0) { return vec3<f32>(0.0); }
-  let last = u32(floor(age / SPAWN));
+  // The droplet stops painting at the bottom; its glyphs fade on their own.
+  let last = min(u32(floor(age / SPAWN)), RUN_GLYPHS);
   let first = u32(max(ceil((age - LIFE) / SPAWN), 0.0));
+  if (first > last) { return vec3<f32>(0.0); }
   var col = vec3<f32>(0.0);
   for (var k = first; k <= last; k++) {
     col += paint(droplet_glyph(d, k), p, px, t);
   }
-  if (MARK) {
+  if (MARK && age <= RUN) {
     let pr = project(droplet_pos(d, t));
     let dist_px = length(p - pr.centre) * u.resolution.y;
     col += vec3<f32>(1.0, 0.3, 0.3) * smoothstep(MARK_PX * 0.5 + 0.7, MARK_PX * 0.5 - 0.7, dist_px);
@@ -249,9 +253,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space: the origin in the middle, one unit = screen height, y up.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y * vec2<f32>(1.0, -1.0);
   let px = in.uv * u.resolution;
-  // One droplet, born at the top of the screen in the middle, as near as
-  // anything can be, the moment this shader was loaded.
-  let d = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded, 0u);
-  let col = droplet_paint(d, p, px, u.time);
+  // Droplets fall one after another from the top of the screen in the
+  // middle, as near as anything can be, from the moment this shader was
+  // loaded; each reads on in the text where the last stopped. The previous
+  // one is painted too, for its glyphs still fading.
+  let n = floor(max(u.time - u.loaded, 0.0) / RUN);
+  let now = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded + n * RUN, u32(n) * (RUN_GLYPHS + 1u));
+  let before = Droplet(vec3<f32>(0.0, 0.5, 0.0), u.loaded + (n - 1.0) * RUN, u32(max(n - 1.0, 0.0)) * (RUN_GLYPHS + 1u));
+  var col = droplet_paint(now, p, px, u.time);
+  if (n > 0.0) { col = min(col + droplet_paint(before, p, px, u.time), vec3<f32>(1.0)); }
   return vec4<f32>(col, 1.0);
 }
