@@ -50,10 +50,12 @@ size (`--height 0` draws every output pixel).
 capture; on this machine grim loses part of the overlay, so judge by the
 snapshot. `ONSEN_MATRIX_ATLAS=path` writes the atlas as a PGM at startup.
 
-## The picture so far
+## The picture so far: v1 of the Droplet and the Glyph
 
-The shader is in sections: bindings; the camera and space; the Glyph; the
-Droplet; the atlas; the aura and the tube look; the frame.
+The shader is in sections, in reading order: bindings; the camera and
+space; the Glyph; the Droplet; the frame; then how a glyph is drawn: the
+atlas, the tube look, the aura. Every tunable is a named constant at the
+top of its section.
 
 **Space** is measured in screen heights at the near plane, the glass of the
 screen, z = 0: a thing at (x, y, 0) of size s appears s screen heights tall.
@@ -64,29 +66,49 @@ screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
 
 **The Glyph** is the one visible element: a character painted at a point
 in space at a moment, at a brightness of its own between `TRAIL_MIN` and
-`TRAIL_MAX`, fading exponentially to nothing over `LIFE`
-seconds and then gone. Whoever painted it chose where in the text it
-starts; as it fades, every `TICK` seconds it reads on to the next character.
+`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`,
+and then gone. Whoever painted it chose where in the text it starts; as it
+fades, every `TICK` seconds it reads on to the next character.
 
 **The Droplet** is a point that falls at `FALL` screen heights per second,
-reading the text, carrying its head: a glyph at full brightness showing the
-character being read. Every `SPAWN` seconds it reads the next character and
-stamps the one it is leaving as a Glyph where it is, pinned there, to fade:
-the trail.
-It stops painting at the bottom of the screen at its depth, and the next
-droplet in its column begins, reading on. `MARK` shows a droplet as a red
-dot, for watching.
+reading the text, carrying its head: a glyph at full brightness, larger and
+whiter, showing the character being read. Every `SPAWN` seconds it reads
+the next character and stamps the one it is leaving as a Glyph where it is,
+pinned there, to fade: the trail. It stops at the bottom of the window at
+its depth. `MARK` shows a droplet as a red dot, for watching.
 
-**The look** draws a Glyph in three layers: the aura, a wide tinted repeat of
-the character's shape beyond its cell; the tube's glow, the character's
+**The look** draws a Glyph in three layers: the aura, a wide tinted repeat
+of the character's shape beyond its cell; the tube's glow, the character's
 light scattered and smeared downward; and the tube's core, the character
-sharp. The glow and core sit under an aperture grille of red, green and blue
-stripes and slowly rolling scanlines, the light breathing a little. Every
-part of it is a named constant at the top of its section.
+sharp. The glow and core sit under an aperture grille of red, green and
+blue stripes and slowly rolling scanlines, the light breathing a little.
 
-**The frame** runs two columns of droplets from the moment the shader was
-loaded: one at the glass, and one two units away, which looks a third the
-size and falls a third as fast.
+**The frame** is a list of columns, `COLUMNS`, each a place where droplets
+fall one after another from the moment the shader was loaded, reading on in
+the text. There are two: one at the glass, one two units in.
+
+## Next: the third dimension
+
+Everything so far is computed per pixel from the clock: a pixel asks every
+column for every glyph that might be alive. That is fine for two columns
+and is the wrong shape for a sky of them. The plan:
+
+- **A scene on the host.** Droplets become a list the host owns, spawned
+  and retired in Rust, with the same fields the shader's `Droplet` has. The
+  glyphs they stamp become a list too, retired when their life ends, which
+  is where "gone, no trace" is enforced.
+- **One quad per glyph.** Instead of the full-screen pass, the host draws
+  each live glyph as a small instanced quad placed by the vertex shader
+  through `project`, and the fragment shader draws the look only where a
+  glyph is. The cost becomes proportional to glyph area, not screen area
+  times glyph count. Light is additive, so order does not matter.
+- **Atmosphere.** Far things dimmer and bluer: one line per layer, from
+  depth, once there is depth to see.
+- **One space, three outputs.** The three displays are three windows onto
+  the same space, side by side; each output's surface gets its own camera
+  offset. The host already owns every output.
+- **The walk.** The camera moving slowly forward, which with depth is what
+  makes it a place rather than a picture.
 
 ## The characters
 
