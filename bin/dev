@@ -1,0 +1,12 @@
+#!/bin/bash
+# The iteration loop: builds, then holds the picture on one output until
+# `bin/dev stop`. Edit shaders/matrix.wgsl and save; the picture follows.
+# Edit src/ and run `bin/dev` again; it rebuilds and restarts.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+monitor=${ONSEN_MATRIX_MONITOR:-HDMI-A-1}
+if [[ ${1:-} == stop ]]; then pkill -x onsen-matrix || true; exit 0; fi
+cd "$root" && cargo build --release 2>&1 | grep -E "^(error|warning)|-->|Finished" || true
+pkill -x onsen-matrix || true; sleep 0.2
+setsid -f bash -c "exec '$root/target/release/onsen-matrix' --output '$monitor' --hold >> '$root/target/dev.log' 2>&1"
+echo "holding $monitor; log: target/dev.log; stop with: bin/dev stop"
