@@ -78,11 +78,17 @@ const GLOW: f32 = 0.35;          // halo strength beyond the edge
 const GLOW_REACH: f32 = 0.25;    // halo reach, in SDF units
 const INK: vec3<f32> = vec3<f32>(0.6, 1.0, 0.65);
 
+// Light fades to nothing before the cell's edge, so no cell shows as a tile.
+fn fade(uv: vec2<f32>) -> f32 {
+  let e = 0.18;
+  return smoothstep(0.0, e, uv.x) * smoothstep(0.0, e, 1.0 - uv.x) * smoothstep(0.0, e, uv.y) * smoothstep(0.0, e, 1.0 - uv.y);
+}
+
 // Soft coverage: the edge spread over BLUR either side, plus a halo that
 // decays with distance outside the edge.
 fn glyph_soft(code: u32, uv: vec2<f32>) -> f32 {
   let d = glyph_sdf(code, uv);
-  let inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+  let inside = fade(uv);
   let body = smoothstep(0.5 - BLUR, 0.5 + BLUR, d);
   let halo = GLOW * exp(-max(0.5 - d, 0.0) / GLOW_REACH * 3.0) * (1.0 - body);
   return (body + halo) * inside;
@@ -95,13 +101,41 @@ fn stripes(y_px: f32) -> f32 {
   return 1.0 - STRIPE_DEPTH * (1.0 - line);
 }
 
+// The tube: an aperture grille of red, green and blue phosphor stripes under
+// rolling scanlines; the light breathes, and the glow smears downward.
+const GRILLE_PITCH: f32 = 3.0;   // width of one phosphor stripe, in drawn pixels
+const GRILLE_FLOOR: f32 = 0.35;  // how much a stripe lets the other two colours through
+const GRILLE_GAIN: f32 = 1.6;    // brightness back after the mask darkens things
+const ROLL: f32 = 18.0;          // scanline roll, in pixels per second
+const BREATHE: f32 = 0.1;        // brightness wobble, as a fraction
+const SMEAR: f32 = 0.03;         // downward glow smear, in cell units
+const SMEAR_GAIN: f32 = 0.85;    // the smear's brightness relative to the body
+
+fn tube(code: u32, uv: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
+  let inside = fade(uv);
+  let d = glyph_sdf(code, uv);
+  // The smear: the glyph's light also falls a little below itself.
+  let smear = max(d, SMEAR_GAIN * glyph_sdf(code, uv - vec2<f32>(0.0, SMEAR)));
+  let body = smoothstep(0.5 - 0.08, 0.5 + 0.08, smear);
+  let halo = 0.5 * exp(-max(0.5 - smear, 0.0) / 0.3 * 3.0) * (1.0 - body);
+  // The grille.
+  let sub = u32(floor(px.x / GRILLE_PITCH)) % 3u;
+  var mask = vec3<f32>(GRILLE_FLOOR);
+  if (sub == 0u) { mask.r = 1.0; } else if (sub == 1u) { mask.g = 1.0; } else { mask.b = 1.0; }
+  // Rolling scanlines and the breath.
+  let phase = fract((px.y + t * ROLL) / STRIPE_PERIOD);
+  let line = 0.5 + 0.5 * cos(phase * 6.2831853);
+  let breathe = 1.0 - BREATHE + BREATHE * sin(t * 9.0) * sin(t * 2.3);
+  let light = INK * (body + halo);
+  return light * mask * GRILLE_GAIN * breathe * inside * (1.0 - STRIPE_DEPTH * (1.0 - line));
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
   // Screen space with the origin in the middle, one unit = screen height.
   let p = (in.uv * u.resolution - 0.5 * u.resolution) / u.resolution.y;
   let size = 0.25;                       // the character's cell, in screen heights
   let uv = p / size + vec2<f32>(0.5);
-  let ink = glyph_soft(droplet_char(1u, u.time), uv);
-  let col = INK * ink * stripes(in.uv.y * u.resolution.y);
+  let col = tube(droplet_char(1u, u.time), uv, in.uv * u.resolution, u.time);
   return vec4<f32>(col, 1.0);
 }
