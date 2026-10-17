@@ -57,10 +57,11 @@ fn project(pos: vec3<f32>) -> Projected {
 // ------------------------------------------------------------------- glyph
 //
 // The Glyph is the system's one visible element: a character painted at a
-// point in space at time `born`, fully bright, fading to nothing over LIFE
-// seconds, at which point it is gone: nothing draws it, nothing keeps it.
-// Whoever painted it chose where in the text it starts; as it fades, every
-// TICK seconds it reads on to the next character.
+// point in space at time `born`, which fades from TRAIL brightness to
+// nothing over LIFE seconds, at which point it is gone: nothing draws it,
+// nothing keeps it. Whoever painted it chose where in the text it starts;
+// as it fades, every TICK seconds it reads on to the next character. (The
+// droplet's own head is drawn with the same look, at full brightness.)
 
 struct Glyph {
   pos: vec3<f32>,   // in space, as above
@@ -70,20 +71,13 @@ struct Glyph {
 };
 
 const LIFE: f32 = 2.6667;        // seconds from painted to gone
-const FLASH: f32 = 0.12;         // seconds the fresh print stays fully bright
-const AFTER: f32 = 0.5;          // the brightness it drops to after the flash, then fades from
+const TRAIL: f32 = 0.5;          // a painted glyph's brightness at birth, which it fades from
 const TICK: f32 = 0.75;          // seconds between characters as it fades
 const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height at the near plane, in screen heights
 
 fn glyph_age(g: Glyph, t: f32) -> f32 { return t - g.born; }
 fn glyph_alive(g: Glyph, t: f32) -> bool { let a = glyph_age(g, t); return a >= 0.0 && a < LIFE; }
-// Fully bright for FLASH, then straight down to AFTER, then slowly to nothing
-// at LIFE: the fresh print is the bright one, the rest its trail.
-fn glyph_opacity(g: Glyph, t: f32) -> f32 {
-  let age = glyph_age(g, t);
-  let trail = AFTER * clamp(1.0 - (age - FLASH) / (LIFE - FLASH), 0.0, 1.0);
-  return mix(1.0, trail, smoothstep(FLASH, FLASH + 0.05, age));
-}
+fn glyph_opacity(g: Glyph, t: f32) -> f32 { return TRAIL * clamp(1.0 - glyph_age(g, t) / LIFE, 0.0, 1.0); }
 
 // The character a glyph shows at time t: the text, read on from its start.
 fn glyph_char(g: Glyph, t: f32) -> u32 {
@@ -95,6 +89,11 @@ fn glyph_char(g: Glyph, t: f32) -> u32 {
 // centre, y up), at pixel px, at time t. Nothing once it is gone.
 fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   if (!glyph_alive(g, t)) { return vec3<f32>(0.0); }
+  return paint_at(g, p, px, t, glyph_opacity(g, t));
+}
+
+// The same, at a given brightness.
+fn paint_at(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32, opacity: f32) -> vec3<f32> {
   let pr = project(g.pos);
   let size = g.size * pr.scale;
   // The glyph's cell: uv 0..1 across it, y down, so the character reads upright.
@@ -107,16 +106,17 @@ fn paint(g: Glyph, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
     col += tube(code, uv, size * u.resolution.y, px, t);
   }
-  return min(col, vec3<f32>(1.0)) * glyph_opacity(g, t);
+  return min(col, vec3<f32>(1.0)) * opacity;
 }
 
 // ----------------------------------------------------------------- droplet
 //
-// The Droplet has no look of its own: it is a point that falls, reading
-// the text. Born at `origin` at time `born`, it descends at FALL screen
-// heights per second, and every SPAWN seconds it paints a Glyph where it
-// is, pinned there, starting on the next character of the text: the k-th
-// glyph starts at text[start + k].
+// The Droplet is a point that falls, reading the text, carrying its head: a
+// glyph at full brightness that shows the character being read. Born at
+// `origin` at time `born`, it descends at FALL screen heights per second,
+// and every SPAWN seconds it reads the next character, and stamps the one
+// it is leaving behind as a Glyph where it is, pinned there, to fade. The
+// k-th stamp starts at text[start + k].
 
 struct Droplet {
   origin: vec3<f32>,   // where it was born, in space
@@ -126,7 +126,7 @@ struct Droplet {
 
 const FALL: f32 = 0.25;          // screen heights per second: 4 seconds top to bottom
 const SPAWN: f32 = 0.25;         // seconds between glyphs
-const MARK: bool = true;         // for testing: show the droplet itself as a dot
+const MARK: bool = false;        // for testing: show the droplet itself as a dot
 const MARK_PX: f32 = 5.0;        // the dot's diameter, in drawn pixels
 
 // The screen is one height tall at the near plane and (CAMERA_DEPTH + z) /
@@ -148,8 +148,8 @@ fn droplet_glyph(d: Droplet, k: u32) -> Glyph {
   return Glyph(droplet_pos(d, when), GLYPH_SIZE, when, d.start + k);
 }
 
-// The light of every glyph a droplet has painted that is still alive: only
-// the last LIFE / SPAWN of them can be.
+// The light of the droplet's head, and of every glyph it has stamped that
+// is still alive: only the last LIFE / SPAWN of them can be.
 fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   let age = t - d.born;
   if (age < 0.0) { return vec3<f32>(0.0); }
@@ -160,6 +160,12 @@ fn droplet_paint(d: Droplet, p: vec2<f32>, px: vec2<f32>, t: f32) -> vec3<f32> {
   var col = vec3<f32>(0.0);
   for (var k = first; k <= last; k++) {
     col += paint(droplet_glyph(d, k), p, px, t);
+  }
+  // The head: where the droplet is now, reading the character after its
+  // latest stamp, at full brightness, until it reaches the bottom.
+  if (age <= droplet_run(d)) {
+    let head = Glyph(droplet_pos(d, t), GLYPH_SIZE, t, d.start + last + 1u);
+    col += paint_at(head, p, px, t, 1.0);
   }
   if (MARK && age <= droplet_run(d)) {
     let pr = project(droplet_pos(d, t));

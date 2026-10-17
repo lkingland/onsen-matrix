@@ -63,14 +63,15 @@ screen `1 / (1 + z)` as fast, and the window the screen shows at depth z is
 `1 + z` heights tall. Nothing is nearer than z = 0.
 
 **The Glyph** is the one visible element: a character painted at a point
-in space at a moment, fully bright, fading to nothing over `LIFE` seconds
-and then gone. Whoever painted it chose where in the text it starts; as it
-fades, every `TICK` seconds it reads on to the next character.
+in space at a moment, at `TRAIL` brightness, fading to nothing over `LIFE`
+seconds and then gone. Whoever painted it chose where in the text it
+starts; as it fades, every `TICK` seconds it reads on to the next character.
 
-**The Droplet** has no look of its own: a point that falls at `FALL` screen
-heights per second, reading the text. Every `SPAWN` seconds it paints a
-Glyph where it is, pinned there, starting on the next character of the
-gongyō.
+**The Droplet** is a point that falls at `FALL` screen heights per second,
+reading the text, carrying its head: a glyph at full brightness showing the
+character being read. Every `SPAWN` seconds it reads the next character and
+stamps the one it is leaving as a Glyph where it is, pinned there, to fade:
+the trail.
 It stops painting at the bottom of the screen at its depth, and the next
 droplet in its column begins, reading on. `MARK` shows a droplet as a red
 dot, for watching.
