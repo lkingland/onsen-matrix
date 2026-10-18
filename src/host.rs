@@ -27,7 +27,15 @@ pub struct HostPlugin;
 
 impl Plugin for HostPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((FrameTimeDiagnosticsPlugin::default(), LogDiagnosticsPlugin::default()))
+        app.add_plugins((
+            FrameTimeDiagnosticsPlugin::default(),
+            // The frame rate and frame time, every few seconds; nothing else.
+            LogDiagnosticsPlugin {
+                wait_duration: std::time::Duration::from_secs(5),
+                filter: Some([FrameTimeDiagnosticsPlugin::FPS, FrameTimeDiagnosticsPlugin::FRAME_TIME].into_iter().collect()),
+                ..default()
+            },
+        ))
             .add_systems(Update, (open_displays, take_focus, end_on_input, snapshot))
             .add_systems(Last, pace);
     }

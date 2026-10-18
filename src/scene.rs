@@ -168,12 +168,23 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 /// at the top of the view, somewhere in it, reading from a random place.
 /// The very first fill is spread over the whole height, so the scene starts
 /// full rather than as a line of heads along the top.
-fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>) {
+fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
     let Some(view) = view else { return };
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
     let now = time.elapsed_secs();
-    // Blocks whose trails have faded come back.
-    pool.retiring.retain(|&(at, block)| if now >= at { pool_free(&mut rain, block); false } else { true });
+    if now - *reported >= 5.0 {
+        *reported = now;
+        info!("rain: {} droplets, {} blocks free, {} retiring, camera z {:.1}", live.iter().count(), pool.free.len(), pool.retiring.len(), cam.z);
+    }
+    // Blocks whose trails have faded come back to the free list, cleared.
+    let (done, waiting): (Vec<_>, Vec<_>) = pool.retiring.drain(..).partition(|&(at, _)| now >= at);
+    pool.retiring = waiting;
+    for (_, block) in done {
+        for r in &mut rain.records[block * SLOTS..(block + 1) * SLOTS] {
+            *r = GlyphRecord::default();
+        }
+        pool.free.push(block);
+    }
     let first_fill = live.is_empty();
     for _ in live.iter().count()..DROPLETS {
         let Some(block) = pool.free.pop() else { break };
@@ -188,12 +199,6 @@ fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rn
         let start = (rng.next() * rain.text.len() as f32) as usize;
         rain.records[block * SLOTS] = GlyphRecord { pos: [x, y, z], born: now, start: start as u32, bright: HEAD, white: HEAD_WHITE, kind: look::HEAD };
         commands.spawn((Droplet { born: now, start, stamped: 0, bottom, block }, Transform::from_xyz(x, y, z), Velocity(Vec3::new(0.0, -FALL, 0.0))));
-    }
-}
-
-fn pool_free(rain: &mut Rain, block: usize) {
-    for r in &mut rain.records[block * SLOTS..(block + 1) * SLOTS] {
-        *r = GlyphRecord::default();
     }
 }
 

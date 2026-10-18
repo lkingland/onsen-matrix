@@ -24,7 +24,7 @@ rm -f "$root/target/snap.request"
 # give focus back to where it was.
 was=$(hyprctl monitors -j | python3 -I -c 'import json,sys; print([m["name"] for m in json.load(sys.stdin) if m["focused"]][0])')
 hyprctl dispatch "hl.dsp.focus({ monitor = \"$monitor\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$monitor" >/dev/null
-setsid -f bash -c "ONSEN_MATRIX_SNAP='$root/target/snap.request' exec '$root/target/release/onsen-matrix' --outputs '$monitor' --hold >> '$root/target/dev.log' 2>&1"
+setsid -f bash -c "ONSEN_MATRIX_LOG_STDERR=1 ONSEN_MATRIX_SNAP='$root/target/snap.request' exec '$root/target/release/onsen-matrix' --outputs '$monitor' --hold >> '$root/target/dev.log' 2>&1"
 for _ in $(seq 100); do hyprctl clients -j | grep -q '"class": "onsen-matrix"' && break; sleep 0.1; done
 sleep 0.3
 hyprctl dispatch "hl.dsp.focus({ monitor = \"$was\" })" >/dev/null 2>&1 || hyprctl dispatch focusmonitor "$was" >/dev/null

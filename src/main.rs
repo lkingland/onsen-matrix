@@ -54,9 +54,10 @@ fn assets_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into()
 }
 
-/// When nothing is reading stderr (a launch from a menu or on idle), the log
+/// When stderr is not a terminal (a launch from a menu or on idle), the log
 /// goes to a file under the state directory instead, so a crash leaves a
 /// trace: ~/.local/state/onsen-matrix/log, kept to the last run.
+/// ONSEN_MATRIX_LOG_STDERR keeps it on stderr, for a loop that redirects it.
 fn log_to_file_when_detached() {
     use std::os::fd::AsRawFd;
     if unsafe { libc::isatty(2) } == 1 || std::env::var_os("ONSEN_MATRIX_LOG_STDERR").is_some() {
