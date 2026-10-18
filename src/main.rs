@@ -41,6 +41,8 @@ pub struct Args {
     pub windowed: bool,
     /// `--fps N`: hold the frame rate at N; 60 unless told otherwise, 0 for the display's rate.
     pub fps: u32,
+    /// `--limit MINUTES`: end the run after this long; 30 unless told otherwise, 0 for no limit.
+    pub limit: f32,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
@@ -98,6 +100,7 @@ fn main() {
         latency,
         windowed,
         fps: value("--fps").and_then(|v| v.parse().ok()).unwrap_or(60),
+        limit: value("--limit").and_then(|v| v.parse().ok()).unwrap_or(30.0),
         snap: env("ONSEN_MATRIX_SNAP").map(Into::into),
     };
     App::new()

@@ -16,7 +16,9 @@ rendered into it once per frame by one camera, bloom and all, so the
 displays show one picture with no seam. Each display gets a borderless
 fullscreen Bevy window, placed on its monitor by name, showing its own
 slice of the canvas scaled to fill it. Any key, click, wheel or pointer
-movement ends the run (`--hold` disables that, for iterating).
+movement ends the run, and so do the session locking and a time limit of
+30 minutes (`--limit MINUTES`, 0 for none), so a run nobody is watching
+does not go on drawing; `--hold` disables all of that, for iterating.
 
     cargo run --release                              every display
     cargo run --release -- --outputs HDMI-A-1,DP-3   these connectors, left to right by position
