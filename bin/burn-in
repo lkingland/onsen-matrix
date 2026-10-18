@@ -1,0 +1,61 @@
+#!/bin/bash
+# A burn-in monitor for a long run: samples the running onsen-matrix and the
+# machine every INTERVAL seconds into a CSV, for a leak or a load trend to
+# show in. Start it, then launch the screensaver however you like.
+#
+#     bin/burn-in              sample into ~/.local/state/onsen-matrix/burn-in.csv (Ctrl-C to stop)
+#     bin/burn-in report       summarise the CSV: first and last samples, trends
+#     bin/burn-in stop         stop a sampler started with setsid
+set -euo pipefail
+state=${XDG_STATE_HOME:-$HOME/.local/state}/onsen-matrix
+csv=$state/burn-in.csv
+interval=${INTERVAL:-10}
+gpu=/sys/class/drm/card1/device
+case ${1:-} in
+  stop) pkill -f "bin/burn-in$" || pkill -f "burn-in sample" || true; exit 0 ;;
+  report)
+    python3 -I - "$csv" <<'PY'
+import sys, csv
+rows = [r for r in csv.DictReader(open(sys.argv[1])) if r["alive"] == "1"]
+if not rows: sys.exit("no samples with the screensaver running")
+first, last = rows[0], rows[-1]
+hours = (float(last["t"]) - float(first["t"])) / 3600
+def f(k): return float(first[k]), float(last[k])
+print(f"samples: {len(rows)} over {hours*60:.0f} min")
+for k, unit in (("rss_mb","MB"),("vram_mb","MB"),("cpu_pct","%"),("gpu_pct","%"),("fps","fps"),("frame_ms","ms"),("droplets",""),("free",""),("threads","")):
+    a, b = f(k)
+    vals = [float(r[k]) for r in rows]
+    trend = f"  trend {(b-a)/max(hours,1e-9):+.1f} {unit}/h" if k in ("rss_mb","vram_mb") else ""
+    print(f"{k:>9}: first {a:8.1f}  last {b:8.1f}  min {min(vals):8.1f}  max {max(vals):8.1f} {unit}{trend}")
+print(f"gpu temp max {max(float(r['gpu_temp_c']) for r in rows):.0f} C, power max {max(float(r['gpu_w']) for r in rows):.0f} W, load max {max(float(r['load1']) for r in rows):.2f}")
+PY
+    exit 0 ;;
+esac
+mkdir -p "$state"
+[[ -f $csv ]] || echo "t,alive,rss_mb,vsz_mb,threads,cpu_pct,gpu_pct,vram_mb,gpu_temp_c,gpu_w,fps,frame_ms,droplets,free,retiring,load1,mem_used_mb" > "$csv"
+echo "sampling every ${interval}s into $csv"
+while :; do
+  pid=$(pgrep -x onsen-matrix | head -1 || true)
+  t=$(date +%s)
+  if [[ -n $pid ]]; then
+    read -r rss vsz thr cpu < <(ps -o rss=,vsz=,nlwp=,%cpu= -p "$pid" | awk '{print int($1/1024), int($2/1024), $3, $4}')
+    alive=1
+  else
+    rss=0; vsz=0; thr=0; cpu=0; alive=0
+  fi
+  g=$(cat $gpu/gpu_busy_percent 2>/dev/null || echo 0)
+  vram=$(awk '{print int($1/1048576)}' $gpu/mem_info_vram_used 2>/dev/null || echo 0)
+  temp=$(awk '{print int($1/1000)}' $gpu/hwmon/hwmon*/temp1_input 2>/dev/null | head -1 || echo 0)
+  watts=$(awk '{print int($1/1000000)}' $gpu/hwmon/hwmon*/power1_average 2>/dev/null | head -1 || echo 0)
+  log=$state/log
+  fps=$(sed 's/\x1b\[[0-9;]*m//g' "$log" 2>/dev/null | grep "fps " | tail -1 | awk '{print $NF}' | tr -d ')' ); fps=${fps:-0}
+  ms=$(sed 's/\x1b\[[0-9;]*m//g' "$log" 2>/dev/null | grep "frame_time" | tail -1 | awk '{print $NF}' | tr -d 'ms)'); ms=${ms:-0}
+  rain=$(sed 's/\x1b\[[0-9;]*m//g' "$log" 2>/dev/null | grep "rain:" | tail -1)
+  droplets=$(echo "$rain" | grep -o '[0-9]* droplets' | awk '{print $1}'); droplets=${droplets:-0}
+  free=$(echo "$rain" | grep -o '[0-9]* blocks free' | awk '{print $1}'); free=${free:-0}
+  retiring=$(echo "$rain" | grep -o '[0-9]* retiring' | awk '{print $1}'); retiring=${retiring:-0}
+  load1=$(cut -d' ' -f1 /proc/loadavg)
+  mem=$(free -m | awk 'NR==2{print $3}')
+  echo "$t,$alive,$rss,$vsz,$thr,$cpu,$g,$vram,$temp,$watts,$fps,$ms,$droplets,$free,$retiring,$load1,$mem" >> "$csv"
+  sleep "$interval"
+done

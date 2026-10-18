@@ -118,6 +118,11 @@ for its own screensaver class, which would float the windows.
 fragments, which scale with the glyphs' area on screen, so density and
 glyph size are the levers.
 
+`bin/burn-in` samples a running screensaver every ten seconds into
+`~/.local/state/onsen-matrix/burn-in.csv` (memory, threads, CPU, GPU, VRAM,
+frame rate, rain counts, system load) and `bin/burn-in report` summarises
+it with the memory trends, for a long run.
+
 ## Known
 
 - Hyprland gives a window on an unfocused monitor 60 fps; the same window
