@@ -103,13 +103,12 @@ its assets at `ONSEN_MATRIX_ASSETS`, then the installed location, then the
 source tree it was built from. It depends on a Vulkan driver, Wayland,
 Noto Sans CJK and Hyprland, and touches no system configuration.
 
-In the Onsen edition, `omarchy-launch-screensaver` runs it when it is
-installed, under Omarchy's screensaver class (`--app-id
-org.omarchy.screensaver`) so the idle service, the lock and the launcher's
-own guard treat it as the screensaver; the edition drops Quattro's window
-rules for the terminal screensaver, which would float it. On stock Omarchy
-run it as `onsen-matrix`, with its own class, and those rules do not
-apply.
+In the Onsen edition it is opt-in: an "Onsen Matrix" entry under System in
+the Super+Esc menu (a menu extension in the edition's config), shown when
+the package is installed. The stock screensaver stays the default and runs
+on idle; this one runs only when chosen. `--app-id` sets the windows'
+class; the default `onsen-matrix` keeps clear of Omarchy's window rules
+for its own screensaver class, which would float the windows.
 
 ## Performance
 
