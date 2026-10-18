@@ -130,6 +130,14 @@ so density and glyph size are the levers.
 frame rate, rain counts, system load) and `bin/burn-in report` summarises
 it with the memory trends, for a long run.
 
+### Burn-in, 2026-10-18
+
+53 minutes on two 4K displays, 60 fps, 1600 droplets: memory 644 to 681
+MB with no trend, VRAM flat at 5.75 GB, GPU 42 to 47% busy at a median
+95 W (peaks 195 W) and 58 °C, a third of a core, no dropped frames, the
+rain's free blocks steady. At 120 fps the same scene drew a median 160 W
+with peaks to 424 W and ran at 70 °C, which is why 60 is the default.
+
 ## Known
 
 - Hyprland gives a window on an unfocused monitor 60 fps; the same window
