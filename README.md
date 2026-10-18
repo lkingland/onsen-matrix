@@ -22,7 +22,7 @@ movement ends the run (`--hold` disables that, for iterating).
     cargo run --release -- --outputs HDMI-A-1,DP-3   these connectors, left to right by position
     onsen-matrix --outputs "desc:LG Electronics"     every display whose make and model say so
     onsen-matrix --exclude desc:JetKVM               every display but a KVM's
-    onsen-matrix --fps 60                            holding 60 fps
+    onsen-matrix --fps 0                             at the display's rate; 60 fps is the default
 
 A selector is a connector name, or `desc:` and part of the make and model
 Hyprland reports for the output, so a display is chosen by what it is
@@ -118,11 +118,12 @@ for its own screensaver class, which would float the windows.
 
 ## Performance
 
-1200 droplets on two 4K displays at 120 fps take about 60% of the GPU and
-60% of one core; `--fps 60` halves both. The CPU cost is the droplets
-(1200 entities) and one buffer upload a frame; the GPU cost is the
-fragments, which scale with the glyphs' area on screen, so density and
-glyph size are the levers.
+The frame rate is held at 60 fps unless `--fps` says otherwise: at 120
+on two 4K displays the card's power draw spiked near its limit on the
+heaviest frames, and 60 halves the work for the same picture. The CPU
+cost is the droplets (1600 entities) and one buffer upload a frame; the
+GPU cost is the fragments, which scale with the glyphs' area on screen,
+so density and glyph size are the levers.
 
 `bin/burn-in` samples a running screensaver every ten seconds into
 `~/.local/state/onsen-matrix/burn-in.csv` (memory, threads, CPU, GPU, VRAM,
@@ -134,9 +135,9 @@ it with the memory trends, for a long run.
 - Hyprland gives a window on an unfocused monitor 60 fps; the same window
   gets 120 while its monitor is focused. The dev loop hands focus back to
   your monitor, so it always shows 60. In use the screensaver's windows
-  hold focus. Accepted. `ONSEN_MATRIX_PRESENT=novsync|immediate|mailbox`,
+  hold focus. Moot at the default 60 fps. `ONSEN_MATRIX_PRESENT=novsync|immediate|mailbox`,
   `ONSEN_MATRIX_LATENCY=N` and `ONSEN_MATRIX_WINDOWED=1` exist for pacing
-  experiments, and `--fps N` holds a rate.
+  experiments.
 
 ## Before Bevy
 
