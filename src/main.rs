@@ -25,6 +25,8 @@ use bevy::window::{ExitCondition, PresentMode};
 pub struct Args {
     /// `--outputs A,B`: the monitors to cover, by name; all of them otherwise.
     pub outputs: Vec<String>,
+    /// `--exclude A,B`: monitors to leave alone (a KVM's virtual display, say).
+    pub exclude: Vec<String>,
     /// `--app-id ID`: the windows' app id (class), `onsen-matrix` unless told
     /// otherwise; Omarchy's idle service and lock know `org.omarchy.screensaver`.
     pub app_id: String,
@@ -86,6 +88,7 @@ fn main() {
     };
     let args = Args {
         outputs: value("--outputs").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
+        exclude: value("--exclude").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
         app_id: value("--app-id").unwrap_or_else(|| "onsen-matrix".into()),
         hold: std::env::args().any(|a| a == "--hold"),
         present_mode,

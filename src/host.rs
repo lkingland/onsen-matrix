@@ -55,6 +55,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
     let mut chosen: Vec<(Entity, &Monitor)> = monitors
         .iter()
         .filter(|(_, m)| args.outputs.is_empty() || m.name.as_ref().is_some_and(|n| args.outputs.contains(n)))
+        .filter(|(_, m)| !m.name.as_ref().is_some_and(|n| args.exclude.contains(n)))
         .collect();
     chosen.sort_by_key(|(_, m)| m.physical_position.x);
     if chosen.is_empty() {

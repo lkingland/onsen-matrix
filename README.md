@@ -21,6 +21,7 @@ movement ends the run (`--hold` disables that, for iterating).
     cargo run --release                              every display
     cargo run --release -- --outputs HDMI-A-1,DP-3   these displays, left to right by position
     onsen-matrix --fps 60                            installed, holding 60 fps
+    onsen-matrix --exclude DP-2                      every display but one
 
 ## The parts
 
