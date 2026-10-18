@@ -52,14 +52,23 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
         return;
     }
     // The monitors to cover, left to right.
+    let descriptions = descriptions();
+    let matches = |m: &Monitor, selectors: &[String]| {
+        let name = m.name.clone().unwrap_or_default();
+        let desc = descriptions.get(&name).cloned().unwrap_or_default().to_lowercase();
+        selectors.iter().any(|s| match s.strip_prefix("desc:") {
+            Some(part) => desc.contains(&part.to_lowercase()),
+            None => *s == name,
+        })
+    };
     let mut chosen: Vec<(Entity, &Monitor)> = monitors
         .iter()
-        .filter(|(_, m)| args.outputs.is_empty() || m.name.as_ref().is_some_and(|n| args.outputs.contains(n)))
-        .filter(|(_, m)| !m.name.as_ref().is_some_and(|n| args.exclude.contains(n)))
+        .filter(|(_, m)| args.outputs.is_empty() || matches(m, &args.outputs))
+        .filter(|(_, m)| !matches(m, &args.exclude))
         .collect();
     chosen.sort_by_key(|(_, m)| m.physical_position.x);
     if chosen.is_empty() {
-        error!("no monitor matched {:?}; monitors: {:?}", args.outputs, monitors.iter().filter_map(|(_, m)| m.name.clone()).collect::<Vec<_>>());
+        error!("no monitor matched {:?} less {:?}; monitors: {:?}", args.outputs, args.exclude, descriptions);
         commands.write_message(AppExit::error());
         return;
     }
@@ -81,7 +90,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
     for (i, (entity, m)) in chosen.into_iter().enumerate() {
         let name = m.name.clone().unwrap_or_default();
         let size = UVec2::new(m.physical_width, m.physical_height);
-        info!("display {name}: {}x{} at {} of {}x{}", size.x, size.y, x, full.x, full.y);
+        info!("display {name} ({}): {}x{} at {} of {}x{}", descriptions.get(&name).map(String::as_str).unwrap_or("?"), size.x, size.y, x, full.x, full.y);
         let window = commands
             .spawn(Window {
                 title: format!("onsen-matrix: {name}"),
@@ -113,6 +122,16 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
         ));
         x += size.x;
     }
+}
+
+/// Each monitor's make and model, by connector name, as Hyprland reports
+/// them; empty when not on Hyprland.
+fn descriptions() -> std::collections::HashMap<String, String> {
+    let Ok(out) = std::process::Command::new("hyprctl").args(["monitors", "-j"]).output() else { return Default::default() };
+    let Ok(list) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else { return Default::default() };
+    list.iter()
+        .filter_map(|m| Some((m.get("name")?.as_str()?.to_string(), m.get("description")?.as_str()?.to_string())))
+        .collect()
 }
 
 /// Keys reach only the focused window, and a window opened from a script

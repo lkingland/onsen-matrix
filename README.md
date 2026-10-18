@@ -19,9 +19,14 @@ slice of the canvas scaled to fill it. Any key, click, wheel or pointer
 movement ends the run (`--hold` disables that, for iterating).
 
     cargo run --release                              every display
-    cargo run --release -- --outputs HDMI-A-1,DP-3   these displays, left to right by position
-    onsen-matrix --fps 60                            installed, holding 60 fps
-    onsen-matrix --exclude DP-2                      every display but one
+    cargo run --release -- --outputs HDMI-A-1,DP-3   these connectors, left to right by position
+    onsen-matrix --outputs "desc:LG Electronics"     every display whose make and model say so
+    onsen-matrix --exclude desc:JetKVM               every display but a KVM's
+    onsen-matrix --fps 60                            holding 60 fps
+
+A selector is a connector name, or `desc:` and part of the make and model
+Hyprland reports for the output, so a display is chosen by what it is
+rather than by where it happens to be plugged in.
 
 ## The parts
 

@@ -23,9 +23,12 @@ use bevy::window::{ExitCondition, PresentMode};
 /// The command line and environment.
 #[derive(Resource, Clone)]
 pub struct Args {
-    /// `--outputs A,B`: the monitors to cover, by name; all of them otherwise.
+    /// `--outputs A,B`: the monitors to cover; all of them otherwise. A
+    /// selector is a connector name (`HDMI-A-1`) or `desc:` and part of the
+    /// monitor's make and model as Hyprland reports it (`desc:LG Electronics`).
     pub outputs: Vec<String>,
-    /// `--exclude A,B`: monitors to leave alone (a KVM's virtual display, say).
+    /// `--exclude A,B`: monitors to leave alone, by the same selectors
+    /// (`desc:JetKVM` for a KVM's virtual display).
     pub exclude: Vec<String>,
     /// `--app-id ID`: the windows' app id (class), `onsen-matrix` unless told
     /// otherwise; Omarchy's idle service and lock know `org.omarchy.screensaver`.
