@@ -12,6 +12,7 @@ bevy = { version = "0.20", default-features = false, features = [
 ] }
 bytemuck = { version = "1.25", features = ["derive"] }
 fontdue = "0.9.4"
+libc = "0.2"
 log = "0.4"
 
 # Dependencies compiled with optimisation even in dev builds: Bevy is slow otherwise.

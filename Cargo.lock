@@ -3341,6 +3341,7 @@ dependencies = [
  "bevy",
  "bytemuck",
  "fontdue",
+ "libc",
  "log",
 ]
 

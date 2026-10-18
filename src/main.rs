@@ -54,7 +54,24 @@ fn assets_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into()
 }
 
+/// When nothing is reading stderr (a launch from a menu or on idle), the log
+/// goes to a file under the state directory instead, so a crash leaves a
+/// trace: ~/.local/state/onsen-matrix/log, kept to the last run.
+fn log_to_file_when_detached() {
+    use std::os::fd::AsRawFd;
+    if unsafe { libc::isatty(2) } == 1 || std::env::var_os("ONSEN_MATRIX_LOG_STDERR").is_some() {
+        return;
+    }
+    let dir = std::env::var("XDG_STATE_HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/state")).join("onsen-matrix");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(file) = std::fs::File::create(dir.join("log")) {
+        unsafe { libc::dup2(file.as_raw_fd(), 2) };
+        std::mem::forget(file);
+    }
+}
+
 fn main() {
+    log_to_file_when_detached();
     // Diagnostics knobs, for chasing frame pacing without a rebuild.
     let env = |k: &str| std::env::var(k).ok();
     let value = |name: &str| std::env::args().skip_while(|a| a != name).nth(1);
