@@ -76,7 +76,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
         let window = commands
             .spawn(Window {
                 title: format!("onsen-matrix: {name}"),
-                name: Some("onsen-matrix".into()),
+                name: Some(args.app_id.clone()),
                 mode: if args.windowed { WindowMode::Windowed } else { WindowMode::BorderlessFullscreen(MonitorSelection::Entity(entity)) },
                 present_mode: args.present_mode,
                 desired_maximum_frame_latency: args.latency,
@@ -120,10 +120,16 @@ fn take_focus(args: Res<Args>, canvas: Option<Res<Canvas>>, mut done: Local<bool
         return;
     }
     *done = true;
+    let class = regex_escape(&args.app_id);
     let dispatch = |cmd: &str| std::process::Command::new("hyprctl").args(["dispatch", cmd]).output();
-    if dispatch("hl.dsp.focus({ window = \"class:^(onsen-matrix)$\" })").map(|o| !o.status.success() || String::from_utf8_lossy(&o.stdout).contains("Invalid")).unwrap_or(true) {
-        let _ = dispatch("focuswindow class:^(onsen-matrix)$");
+    if dispatch(&format!("hl.dsp.focus({{ window = \"class:^({class})$\" }})")).map(|o| !o.status.success() || String::from_utf8_lossy(&o.stdout).contains("Invalid")).unwrap_or(true) {
+        let _ = dispatch(&format!("focuswindow class:^({class})$"));
     }
+}
+
+/// Dots and the like in an app id, escaped for Hyprland's regex.
+fn regex_escape(s: &str) -> String {
+    s.chars().flat_map(|c| if ".+*?()[]{}|^$\\".contains(c) { vec!['\\', c] } else { vec![c] }).collect()
 }
 
 /// Holds the frame rate at --fps by sleeping out the rest of each frame,

@@ -20,6 +20,7 @@ movement ends the run (`--hold` disables that, for iterating).
 
     cargo run --release                              every display
     cargo run --release -- --outputs HDMI-A-1,DP-3   these displays, left to right by position
+    onsen-matrix --fps 60                            installed, holding 60 fps
 
 ## The parts
 
@@ -91,6 +92,24 @@ sharp. The glow and core sit under an aperture grille of red, green and
 blue stripes and slowly rolling scanlines, the light breathing a little.
 Glyphs are light and blend purely additively, so nothing a glyph draws can
 hide what is behind it; the camera adds Bevy's bloom on top.
+
+## Packaging
+
+    makepkg -D pkg -si
+
+builds the package from this checkout and installs it: `/usr/bin/onsen-matrix`
+and `/usr/share/onsen-matrix/assets`, nothing else. The binary looks for
+its assets at `ONSEN_MATRIX_ASSETS`, then the installed location, then the
+source tree it was built from. It depends on a Vulkan driver, Wayland,
+Noto Sans CJK and Hyprland, and touches no system configuration.
+
+In the Onsen edition, `omarchy-launch-screensaver` runs it when it is
+installed, under Omarchy's screensaver class (`--app-id
+org.omarchy.screensaver`) so the idle service, the lock and the launcher's
+own guard treat it as the screensaver; the edition drops Quattro's window
+rules for the terminal screensaver, which would float it. On stock Omarchy
+run it as `onsen-matrix`, with its own class, and those rules do not
+apply.
 
 ## Performance
 

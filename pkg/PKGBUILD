@@ -1,0 +1,49 @@
+# onsen-matrix: built from this checkout. From the repository's root:
+#
+#     makepkg -D pkg -si
+#
+# The package carries the binary and the assets (the text, the shader) and
+# nothing else; the screensaver touches no system configuration.
+pkgname=onsen-matrix
+pkgver=0.2.0.r57.g6da98371
+pkgrel=1
+pkgdesc='A screensaver for Hyprland: a three-dimensional rain of the Lotus Sutra, across every display'
+arch=('x86_64' 'aarch64')
+url='https://github.com/lkingland/onsen-matrix'
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'wayland' 'libxkbcommon' 'vulkan-icd-loader' 'noto-fonts-cjk' 'hyprland')
+makedepends=('cargo')
+options=('!lto' '!debug')
+
+# The source is the checkout this PKGBUILD lives in: the parent of its
+# directory, which makepkg gives as $startdir once the functions run. It is
+# built in the checkout's own target directory, so a build here is
+# incremental with the one the loop uses.
+_root() { cd "$startdir/.." && pwd; }
+
+pkgver() {
+  # The version in Cargo.toml, and the commit count and id of the checkout.
+  cd "$(_root)"
+  local base
+  base=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+  printf '%s.r%s.g%s' "$base" "$(git rev-list --count HEAD 2>/dev/null || echo 0)" "$(git rev-parse --short=8 HEAD 2>/dev/null || echo local)"
+}
+
+build() {
+  cd "$(_root)"
+  CARGO_TARGET_DIR="$PWD/target" cargo build --release --locked
+}
+
+check() {
+  cd "$(_root)"
+  CARGO_TARGET_DIR="$PWD/target" cargo test --release --locked
+}
+
+package() {
+  cd "$(_root)"
+  install -Dm755 target/release/onsen-matrix "$pkgdir/usr/bin/onsen-matrix"
+  install -Dm644 assets/shaders/glyph.wesl "$pkgdir/usr/share/onsen-matrix/assets/shaders/glyph.wesl"
+  install -Dm644 assets/lotus-gongyo.txt "$pkgdir/usr/share/onsen-matrix/assets/lotus-gongyo.txt"
+  install -Dm644 assets/lotus-sutra.txt "$pkgdir/usr/share/onsen-matrix/assets/lotus-sutra.txt"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/onsen-matrix/README.md"
+}

@@ -25,6 +25,9 @@ use bevy::window::{ExitCondition, PresentMode};
 pub struct Args {
     /// `--outputs A,B`: the monitors to cover, by name; all of them otherwise.
     pub outputs: Vec<String>,
+    /// `--app-id ID`: the windows' app id (class), `onsen-matrix` unless told
+    /// otherwise; Omarchy's idle service and lock know `org.omarchy.screensaver`.
+    pub app_id: String,
     /// `--hold`: never end on input, for iterating.
     pub hold: bool,
     /// How each window is presented: vsync unless a pacing knob says otherwise.
@@ -36,6 +39,19 @@ pub struct Args {
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
+}
+
+/// Where the assets are: `ONSEN_MATRIX_ASSETS` if set, else the installed
+/// location if it exists, else the source tree this binary was built from.
+fn assets_dir() -> String {
+    if let Ok(dir) = std::env::var("ONSEN_MATRIX_ASSETS") {
+        return dir;
+    }
+    let installed = "/usr/share/onsen-matrix/assets";
+    if std::path::Path::new(installed).is_dir() {
+        return installed.into();
+    }
+    concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into()
 }
 
 fn main() {
@@ -52,6 +68,7 @@ fn main() {
     };
     let args = Args {
         outputs: value("--outputs").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
+        app_id: value("--app-id").unwrap_or_else(|| "onsen-matrix".into()),
         hold: std::env::args().any(|a| a == "--hold"),
         present_mode,
         latency,
@@ -64,8 +81,7 @@ fn main() {
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(
             DefaultPlugins
-                // Assets live in the source tree, wherever the binary is.
-                .set(AssetPlugin { file_path: concat!(env!("CARGO_MANIFEST_DIR"), "/assets").into(), ..default() })
+                .set(AssetPlugin { file_path: assets_dir(), ..default() })
                 // No window up front: host.rs opens one per monitor, each
                 // fullscreen on its own, once the monitors are known.
                 .set(WindowPlugin { primary_window: None, exit_condition: ExitCondition::OnAllClosed, ..default() }),
