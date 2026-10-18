@@ -6,7 +6,9 @@
 #     bin/burn-in              sample into ~/.local/state/onsen-matrix/burn-in.csv (Ctrl-C to stop)
 #     bin/burn-in report       summarise the CSV: first and last samples, trends
 #     bin/burn-in stop         stop a sampler started with setsid
-set -euo pipefail
+# No -e: a sample that finds nothing (the log just truncated by a fresh
+# run, say) must record a zero and carry on, not end the sampler.
+set -u
 state=${XDG_STATE_HOME:-$HOME/.local/state}/onsen-matrix
 csv=$state/burn-in.csv
 interval=${INTERVAL:-10}
@@ -37,8 +39,7 @@ echo "sampling every ${interval}s into $csv"
 while :; do
   pid=$(pgrep -x onsen-matrix | head -1 || true)
   t=$(date +%s)
-  if [[ -n $pid ]]; then
-    read -r rss vsz thr cpu < <(ps -o rss=,vsz=,nlwp=,%cpu= -p "$pid" | awk '{print int($1/1024), int($2/1024), $3, $4}')
+  if [[ -n $pid ]] && read -r rss vsz thr cpu < <(ps -o rss=,vsz=,nlwp=,%cpu= -p "$pid" 2>/dev/null | awk '{print int($1/1024), int($2/1024), $3, $4}'); then
     alive=1
   else
     rss=0; vsz=0; thr=0; cpu=0; alive=0
