@@ -18,6 +18,7 @@
 mod atlas;
 mod config;
 mod host;
+mod inhibit;
 mod look;
 mod scene;
 
@@ -118,6 +119,6 @@ fn main() {
                 // fullscreen on its own, once the monitors are known.
                 .set(WindowPlugin { primary_window: None, exit_condition: ExitCondition::OnAllClosed, ..default() }),
         )
-        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin))
+        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin, inhibit::InhibitPlugin))
         .run();
 }

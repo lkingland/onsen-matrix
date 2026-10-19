@@ -14,9 +14,13 @@ bytemuck = { version = "1.25", features = ["derive"] }
 fontdue = "0.9.4"
 libc = "0.2"
 log = "0.4"
+raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = { version = "0.31", features = ["system"] }
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 
 # Dependencies compiled with optimisation even in dev builds: Bevy is slow otherwise.
 [profile.dev.package."*"]

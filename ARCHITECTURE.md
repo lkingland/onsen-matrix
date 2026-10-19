@@ -20,6 +20,12 @@ and `--outputs`, `--exclude`, `--fps` and `--limit` override the file. The
 repository's `config.toml` lists every setting at its default and is
 installed to `/usr/share/onsen-matrix/config.toml`.
 
+While it runs it holds a Wayland idle inhibitor on its surface, as a video
+player does, so the compositor's idle timers do not fire and Omarchy's own
+screensaver and lock do not take over the display mid-run; the time limit
+ends the run, and idle resumes. `hyprctl clients` shows the window as
+`inhibitingIdle`.
+
 The run ends on any key, click, wheel or pointer movement; on losing
 focus, which is what the session lock does to every window; and at a time
 limit (30 minutes; `--limit MINUTES`, 0 for none). None of that polls
@@ -48,6 +54,8 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 - `src/config.rs`: the settings, read from `config.toml` into a resource.
 - `src/host.rs`: the canvas and the displays, ending the run, snapshots,
   frame-time logging.
+- `src/inhibit.rs`: the idle inhibitor, made on winit's own surface through
+  its raw handles.
 - `bin/dev`: the loop. `bin/dev` builds and holds the picture on one display
   (`ONSEN_MATRIX_MONITOR`, default HDMI-A-1); `bin/dev snap` writes the
   canvas to `target/snap.png`; `bin/dev stop`. `bin/burn-in` samples a long
