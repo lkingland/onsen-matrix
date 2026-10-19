@@ -67,7 +67,7 @@ impl Default for Camera {
 }
 impl Default for Rain {
     fn default() -> Self {
-        Rain { droplets: 1600, near: 0.3, far: 14.0 }
+        Rain { droplets: 1120, near: 0.3, far: 14.0 }
     }
 }
 impl Default for Droplet {

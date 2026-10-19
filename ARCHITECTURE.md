@@ -99,7 +99,7 @@ replace the file and rebuild.
 
 ## Performance
 
-1600 droplets on two 4K displays at 60 fps: GPU 42 to 47% busy at a median
+1600 droplets (the default is now 1120) on two 4K displays at 60 fps: GPU 42 to 47% busy at a median
 95 W and 58 °C, a third of a core, memory flat at about 660 MB, VRAM flat
 at 5.75 GB, no dropped frames over 53 minutes. At 120 fps the same scene
 drew a median 160 W with peaks to 424 W at 70 °C, which is why 60 is the
