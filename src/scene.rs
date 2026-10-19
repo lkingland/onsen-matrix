@@ -7,65 +7,62 @@
 //!
 //! Space is in units, y up. Bevy's camera looks along -z, so ahead is -z.
 //! The camera's field of view is set so that one unit, one unit ahead,
-//! spans the canvas's height; a glyph of GLYPH_SIZE units at that distance
-//! is GLYPH_SIZE of the canvas tall. The camera starts at the origin and
+//! spans the canvas's height; a glyph of `glyph.size` units at that distance
+//! is that fraction of the canvas tall. The camera starts at the origin and
 //! has a velocity like anything else.
 //!
-//! The rain falls in the camera's view: from RAIN_NEAR to RAIN_FAR ahead,
+//! The rain falls in the camera's view: from `rain.near` to `rain.far` ahead,
 //! and at each depth as wide as the view is there (RAIN_SPREAD of its
 //! width), born just above the top of the view at that depth and gone
-//! below its bottom, or once behind the camera. There are always DROPLETS
-//! of them; when one goes, another is born somewhere in the view.
+//! below its bottom, or once behind the camera. There are always
+//! `rain.droplets` of them; when one goes, another is born somewhere in the view.
 //!
-//! Every tunable is a named constant below.
+//! The settings come from `config.toml`; the rest of the tunables are named
+//! constants below.
 
 use bevy::camera::RenderTarget;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::render::storage::ShaderBuffer;
 
+use crate::config::Config;
 use crate::look::{self, GlyphMaterial, GlyphRecord, Params, Rain};
 
-// ------------------------------------------------------------------ camera
-const WALK: f32 = 0.2;           // units per second forward
-const RISE: f32 = 0.0;           // units per second upward
-
-// -------------------------------------------------------------------- rain
-const DROPLETS: usize = 1600;    // how many droplets are falling at once
-const RAIN_NEAR: f32 = 0.3;      // units ahead of the camera
-const RAIN_FAR: f32 = 14.0;      // the furthest, and smallest
-const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
-const RAIN_MARGIN: f32 = 0.3;    // units above the view a droplet is born, and below it that it dies
+// The settings (`config.rs`): the camera's walk and rise, the rain's
+// density and depth, the droplets' fall and spawn, the glyphs' size, life
+// and tick. What follows are the constants that are part of the look.
 
 // ----------------------------------------------------------------- droplet
-const FALL: f32 = 0.28125;       // units per second downward
-const SPAWN: f32 = 0.125;        // seconds between stamps
 const HEAD: f32 = 1.3;           // the head's brightness
 const HEAD_SIZE: f32 = 1.25;     // the head's size, relative to a stamped glyph
 const HEAD_WHITE: f32 = 0.2;     // how far the head's colour is pulled toward white
 
 // ------------------------------------------------------------------- glyph
-const GLYPH_SIZE: f32 = 0.03125; // a glyph's cell height, in units
-const LIFE: f32 = 10.0;          // seconds from stamped to gone
 const TRAIL_MIN: f32 = 0.1;      // a glyph's brightness at birth is its own, between these
 const TRAIL_MAX: f32 = 0.7;
 const DECAY: f32 = 6.0;          // e-folds of fading across a life
 const FLOOR: f32 = 0.08;         // the fraction of birth brightness the tail holds at
-const TICK: f32 = 0.75;          // seconds between characters as it fades
+
+// -------------------------------------------------------------------- rain
+const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
+const RAIN_MARGIN: f32 = 0.3;    // units above the view a droplet is born, and below it that it dies
 
 /// Records per droplet: its head, and a slot for each glyph that can be
 /// alive at once. A droplet's slots are its own until its trail has faded.
-const SLOTS: usize = 1 + (LIFE / SPAWN) as usize + 1;
+fn slots(cfg: &Config) -> usize {
+    1 + (cfg.glyph.life / cfg.droplet.spawn) as usize + 1
+}
 /// Blocks of slots in the pool: enough for every droplet, and for the trails
 /// of as many dead ones still fading.
-const BLOCKS: usize = 2 * DROPLETS;
+fn blocks(cfg: &Config) -> usize {
+    2 * cfg.rain.droplets
+}
 
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Rng(0x2545F491))
-            .insert_resource(Pool { free: (0..BLOCKS).rev().collect(), retiring: Vec::new() })
             .add_systems(PreStartup, setup)
             .add_systems(Update, (drift, rain, droplets, upload).chain());
     }
@@ -89,7 +86,7 @@ pub struct Velocity(pub Vec3);
 pub struct Walker;
 
 /// A falling point reading the text, with a block of glyph records: its
-/// head first, then its trail. Every SPAWN seconds it reads the next
+/// head first, then its trail. Every `droplet.spawn` seconds it reads the next
 /// character and stamps the one it is leaving as a glyph where it is.
 /// Below `bottom`, or once behind the camera, it is despawned; its trail
 /// fades on.
@@ -108,6 +105,7 @@ pub struct Droplet {
 /// The blocks of records not in use, and those whose trails are still fading.
 #[derive(Resource)]
 struct Pool {
+    slots: usize,
     free: Vec<usize>,
     retiring: Vec<(f32, usize)>, // (when it is free again, block)
 }
@@ -134,21 +132,23 @@ fn hash(n: u32) -> f32 {
     x as f32 / u32::MAX as f32
 }
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut meshes: ResMut<Assets<Mesh>>, mut buffers: ResMut<Assets<ShaderBuffer>>, mut materials: ResMut<Assets<GlyphMaterial>>) {
-    let params = Params { now: 0.0, life: LIFE, tick: TICK, glyph_size: GLYPH_SIZE, head_size: HEAD_SIZE, decay: DECAY, floor: FLOOR, _pad: 0.0 };
-    look::spawn_rain(&mut commands, &mut images, &mut meshes, &mut buffers, &mut materials, BLOCKS * SLOTS, params);
+fn setup(mut commands: Commands, cfg: Res<Config>, mut images: ResMut<Assets<Image>>, mut meshes: ResMut<Assets<Mesh>>, mut buffers: ResMut<Assets<ShaderBuffer>>, mut materials: ResMut<Assets<GlyphMaterial>>) {
+    let params = Params { now: 0.0, life: cfg.glyph.life, tick: cfg.glyph.tick, glyph_size: cfg.glyph.size, head_size: HEAD_SIZE, decay: DECAY, floor: FLOOR, _pad: 0.0 };
+    let (slots, blocks) = (slots(&cfg), blocks(&cfg));
+    look::spawn_rain(&mut commands, &mut images, &mut meshes, &mut buffers, &mut materials, blocks * slots, params);
+    commands.insert_resource(Pool { slots, free: (0..blocks).rev().collect(), retiring: Vec::new() });
 }
 
 /// The camera, rendering to `target` before anything else. The field of
 /// view makes one unit, one unit ahead, span the picture's height.
-pub fn spawn_camera(commands: &mut Commands, target: RenderTarget) {
+pub fn spawn_camera(commands: &mut Commands, cfg: &Config, target: RenderTarget) {
     commands.spawn((
         Camera3d::default(),
         Camera { order: -1, ..default() },
         target,
         Projection::Perspective(PerspectiveProjection { fov: 2.0 * (0.5f32).atan(), near: 0.01, ..default() }),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        Velocity(Vec3::new(0.0, RISE, -WALK)),
+        Velocity(Vec3::new(0.0, cfg.camera.rise, -cfg.camera.walk)),
         Walker,
         bevy::camera::Hdr,
         bevy::core_pipeline::tonemapping::Tonemapping::TonyMcMapface,
@@ -164,13 +164,14 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
     }
 }
 
-/// Keeps DROPLETS falling: each one that has gone is replaced by one born
+/// Keeps `rain.droplets` falling: each one that has gone is replaced by one born
 /// at the top of the view, somewhere in it, reading from a random place.
 /// The very first fill is spread over the whole height, so the scene starts
 /// full rather than as a line of heads along the top.
 #[allow(clippy::too_many_arguments)]
-fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
+fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
     let Some(view) = view else { return };
+    let slots = pool.slots;
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
     let now = time.elapsed_secs();
     if now - *reported >= 5.0 {
@@ -181,15 +182,15 @@ fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rn
     let (done, waiting): (Vec<_>, Vec<_>) = pool.retiring.drain(..).partition(|&(at, _)| now >= at);
     pool.retiring = waiting;
     for (_, block) in done {
-        for r in &mut rain.records[block * SLOTS..(block + 1) * SLOTS] {
+        for r in &mut rain.records[block * slots..(block + 1) * slots] {
             *r = GlyphRecord::default();
         }
         pool.free.push(block);
     }
     let first_fill = live.is_empty();
-    for _ in live.iter().count()..DROPLETS {
+    for _ in live.iter().count()..cfg.rain.droplets {
         let Some(block) = pool.free.pop() else { break };
-        let ahead = rng.range(RAIN_NEAR, RAIN_FAR);
+        let ahead = rng.range(cfg.rain.near, cfg.rain.far);
         // The view at that depth: `ahead` units tall, and as wide as the view's shape makes it.
         let half_w = 0.5 * ahead * view.aspect * RAIN_SPREAD;
         let half_h = 0.5 * ahead;
@@ -198,33 +199,34 @@ fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rn
         let (top, bottom) = (cam.y + half_h + RAIN_MARGIN, cam.y - half_h - RAIN_MARGIN);
         let y = if first_fill { rng.range(bottom, top) } else { top };
         let start = (rng.next() * rain.text.len() as f32) as usize;
-        rain.records[block * SLOTS] = GlyphRecord { pos: [x, y, z], born: now, start: start as u32, bright: HEAD, white: HEAD_WHITE, kind: look::HEAD };
-        commands.spawn((Droplet { born: now, start, stamped: 0, bottom, block }, Transform::from_xyz(x, y, z), Velocity(Vec3::new(0.0, -FALL, 0.0))));
+        rain.records[block * slots] = GlyphRecord { pos: [x, y, z], born: now, start: start as u32, bright: HEAD, white: HEAD_WHITE, kind: look::HEAD };
+        commands.spawn((Droplet { born: now, start, stamped: 0, bottom, block }, Transform::from_xyz(x, y, z), Velocity(Vec3::new(0.0, -cfg.droplet.fall, 0.0))));
     }
 }
 
-/// Droplets move their head, stamp a glyph every SPAWN seconds with the
+/// Droplets move their head, stamp a glyph every `droplet.spawn` seconds with the
 /// head reading on, and at the bottom, or once behind the camera, are gone:
 /// the head record is cleared and the block kept until the trail has faded.
-fn droplets(mut commands: Commands, time: Res<Time>, mut rain: ResMut<Rain>, mut pool: ResMut<Pool>, cameras: Query<&Transform, With<Walker>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>) {
+fn droplets(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, mut rain: ResMut<Rain>, mut pool: ResMut<Pool>, cameras: Query<&Transform, With<Walker>>, mut drops: Query<(Entity, &mut Droplet, &Transform)>) {
     let now = time.elapsed_secs();
     let Some(cam_z) = cameras.iter().next().map(|t| t.translation.z) else { return };
+    let (slots, spawn, fall, life) = (pool.slots, cfg.droplet.spawn, cfg.droplet.fall, cfg.glyph.life);
     for (entity, mut d, t) in &mut drops {
-        let head = d.block * SLOTS;
+        let head = d.block * slots;
         if t.translation.y < d.bottom || t.translation.z > cam_z {
             rain.records[head].kind = look::EMPTY;
-            pool.retiring.push((now + LIFE, d.block));
+            pool.retiring.push((now + life, d.block));
             commands.entity(entity).despawn();
             continue;
         }
-        let due = ((now - d.born) / SPAWN) as u32;
+        let due = ((now - d.born) / spawn) as u32;
         while d.stamped < due {
             let k = d.stamped as usize;
-            let when = d.born + (k as f32) * SPAWN;
+            let when = d.born + (k as f32) * spawn;
             // Where the droplet was at the moment of the stamp: higher, by what it has fallen since.
-            let pos = t.translation + Vec3::Y * FALL * (now - when);
+            let pos = t.translation + Vec3::Y * fall * (now - when);
             let bright = TRAIL_MIN + (TRAIL_MAX - TRAIL_MIN) * hash((d.start + k) as u32 * 7919 + (d.born * 997.0) as u32);
-            rain.records[head + 1 + k % (SLOTS - 1)] = GlyphRecord { pos: pos.to_array(), born: when, start: (d.start + k) as u32, bright, white: 0.0, kind: look::TRAIL };
+            rain.records[head + 1 + k % (slots - 1)] = GlyphRecord { pos: pos.to_array(), born: when, start: (d.start + k) as u32, bright, white: 0.0, kind: look::TRAIL };
             d.stamped += 1;
         }
         let r = &mut rain.records[head];

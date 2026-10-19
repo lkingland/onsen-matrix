@@ -14,6 +14,12 @@ Outputs are chosen by selector: a connector name (`HDMI-A-1`) or `desc:`
 and part of the make and model Hyprland reports (`desc:LG Electronics`), so
 a display is chosen by what it is rather than where it is plugged in.
 
+The settings live in `config.toml`: `ONSEN_MATRIX_CONFIG` if set, else
+`~/.config/onsen-matrix/config.toml`; a setting left out keeps its default,
+and `--outputs`, `--exclude`, `--fps` and `--limit` override the file. The
+repository's `config.toml` lists every setting at its default and is
+installed to `/usr/share/onsen-matrix/config.toml`.
+
 The run ends on any key, click, wheel or pointer movement; on losing
 focus, which is what the session lock does to every window; and at a time
 limit (30 minutes; `--limit MINUTES`, 0 for none). None of that polls
@@ -39,6 +45,7 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
   field in a grid of cells, rendered from Noto Sans CJK at startup, so
   character `n` is cell `n`; distance fields stay crisp at any size and give
   glow and blur by thresholding. Also the text as a sequence of indices.
+- `src/config.rs`: the settings, read from `config.toml` into a resource.
 - `src/host.rs`: the canvas and the displays, ending the run, snapshots,
   frame-time logging.
 - `bin/dev`: the loop. `bin/dev` builds and holds the picture on one display
@@ -50,24 +57,25 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 
 **Space** is in units, y up, ahead is -z. The camera's field of view makes
 one unit, one unit ahead, span the canvas's height. The camera starts at
-the origin and has a velocity: forward at `WALK`, up at `RISE`.
+the origin and has a velocity: forward at `camera.walk`, up at `camera.rise`.
 
-**The rain** keeps `DROPLETS` droplets falling in the camera's view: from
-`RAIN_NEAR` to `RAIN_FAR` ahead, at each depth as wide as the view is
+**The rain** keeps `rain.droplets` droplets falling in the camera's view:
+from `rain.near` to `rain.far` ahead, at each depth as wide as the view is
 there, born just above the top of the view at that depth and gone below its
 bottom, or once behind the camera. When one goes, another is born somewhere
 in the view, reading from a random place in the text.
 
-**The Droplet** is a point falling at `FALL` units per second, reading the
-text, carrying its head: a glyph at `HEAD` brightness, `HEAD_SIZE` larger,
-pulled `HEAD_WHITE` toward white, showing the character being read. Every
-`SPAWN` seconds it reads the next character and stamps the one it is
-leaving as a Glyph where it is.
+**The Droplet** is a point falling at `droplet.fall` units per second,
+reading the text, carrying its head: a glyph at `HEAD` brightness,
+`HEAD_SIZE` larger, pulled `HEAD_WHITE` toward white, showing the character
+being read. Every `droplet.spawn` seconds it reads the next character and
+stamps the one it is leaving as a Glyph where it is.
 
 **The Glyph** is the one visible element: a quad with the look on it, at a
 point in space, born at a brightness of its own between `TRAIL_MIN` and
-`TRAIL_MAX`, fading exponentially to a floor and then to nothing at `LIFE`.
-As it fades, every `TICK` seconds it reads on to the next character. It is
+`TRAIL_MAX`, fading exponentially to a floor and then to nothing at
+`glyph.life`. As it fades, every `glyph.tick` seconds it reads on to the
+next character. It is
 a record in the rain's buffer; its droplet's block of records is reused once
 its trail has faded.
 

@@ -5,7 +5,7 @@
 # The package carries the binary and the assets (the text, the shader) and
 # nothing else; the screensaver touches no system configuration.
 pkgname=onsen-matrix
-pkgver=1.0.0.r68.gb1947d28
+pkgver=1.0.0.r70.g32ffebf6
 pkgrel=1
 pkgdesc='A screensaver for Hyprland: a three-dimensional rain of the Lotus Sutra, across every display'
 arch=('x86_64' 'aarch64')
@@ -47,4 +47,5 @@ package() {
   install -Dm644 assets/lotus-sutra.txt "$pkgdir/usr/share/onsen-matrix/assets/lotus-sutra.txt"
   install -Dm644 README.md "$pkgdir/usr/share/doc/onsen-matrix/README.md"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/onsen-matrix/LICENSE"
+  install -Dm644 config.toml "$pkgdir/usr/share/onsen-matrix/config.toml"
 }

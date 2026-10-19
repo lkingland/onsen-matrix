@@ -7,12 +7,16 @@
 //! falling in a box that follows the camera, which has a velocity too.
 //! Bevy does the rest: transforms, projection, instancing, bloom.
 //!
+//! The settings come from `config.toml` (`config.rs`), overridden by the
+//! command line.
+//!
 //! The look (`look.rs`) is one material on one quad, shared by every glyph,
 //! with the per-glyph character and brightness packed into the instance's
 //! tag; its shader is `assets/shaders/glyph.wesl`, hot-reloaded on save.
 //! The characters come from a signed-distance atlas (`atlas.rs`).
 
 mod atlas;
+mod config;
 mod host;
 mod look;
 mod scene;
@@ -20,16 +24,10 @@ mod scene;
 use bevy::prelude::*;
 use bevy::window::{ExitCondition, PresentMode};
 
-/// The command line and environment.
+/// The command line and environment: the switches that are not settings.
+/// `--outputs`, `--exclude`, `--fps` and `--limit` override the config.
 #[derive(Resource, Clone)]
 pub struct Args {
-    /// `--outputs A,B`: the monitors to cover; all of them otherwise. A
-    /// selector is a connector name (`HDMI-A-1`) or `desc:` and part of the
-    /// monitor's make and model as Hyprland reports it (`desc:LG Electronics`).
-    pub outputs: Vec<String>,
-    /// `--exclude A,B`: monitors to leave alone, by the same selectors
-    /// (`desc:JetKVM` for a KVM's virtual display).
-    pub exclude: Vec<String>,
     /// `--app-id ID`: the windows' app id (class), `onsen-matrix` unless told
     /// otherwise; Omarchy's idle service and lock know `org.omarchy.screensaver`.
     pub app_id: String,
@@ -39,10 +37,6 @@ pub struct Args {
     pub present_mode: PresentMode,
     pub latency: Option<std::num::NonZero<u32>>,
     pub windowed: bool,
-    /// `--fps N`: hold the frame rate at N; 60 unless told otherwise, 0 for the display's rate.
-    pub fps: u32,
-    /// `--limit MINUTES`: end the run after this long; 30 unless told otherwise, 0 for no limit.
-    pub limit: f32,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
@@ -91,20 +85,31 @@ fn main() {
         Some("mailbox") => PresentMode::Mailbox,
         _ => PresentMode::AutoVsync,
     };
+    let mut config = config::Config::load();
+    let list = |v: String| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect::<Vec<_>>();
+    if let Some(v) = value("--outputs") {
+        config.run.outputs = list(v);
+    }
+    if let Some(v) = value("--exclude") {
+        config.run.exclude = list(v);
+    }
+    if let Some(v) = value("--fps").and_then(|v| v.parse().ok()) {
+        config.run.fps = v;
+    }
+    if let Some(v) = value("--limit").and_then(|v| v.parse().ok()) {
+        config.run.limit = v;
+    }
     let args = Args {
-        outputs: value("--outputs").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
-        exclude: value("--exclude").map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default(),
         app_id: value("--app-id").unwrap_or_else(|| "onsen-matrix".into()),
         hold: std::env::args().any(|a| a == "--hold"),
         present_mode,
         latency,
         windowed,
-        fps: value("--fps").and_then(|v| v.parse().ok()).unwrap_or(60),
-        limit: value("--limit").and_then(|v| v.parse().ok()).unwrap_or(30.0),
         snap: env("ONSEN_MATRIX_SNAP").map(Into::into),
     };
     App::new()
         .insert_resource(args)
+        .insert_resource(config)
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins(
             DefaultPlugins

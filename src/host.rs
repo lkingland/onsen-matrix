@@ -18,6 +18,7 @@ use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::{Monitor, MonitorSelection, WindowFocused, WindowMode, WindowRef};
 
+use crate::config::Config;
 use crate::scene::{spawn_camera, View};
 use crate::Args;
 
@@ -48,7 +49,7 @@ pub struct Canvas(pub Handle<Image>);
 
 /// Makes the canvas and opens a fullscreen window on each wanted monitor,
 /// once the monitors are known.
-fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Canvas>>, mut images: ResMut<Assets<Image>>, monitors: Query<(Entity, &Monitor)>) {
+fn open_displays(mut commands: Commands, args: Res<Args>, cfg: Res<Config>, canvas: Option<Res<Canvas>>, mut images: ResMut<Assets<Image>>, monitors: Query<(Entity, &Monitor)>) {
     if canvas.is_some() || monitors.is_empty() {
         return;
     }
@@ -64,12 +65,12 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
     };
     let mut chosen: Vec<(Entity, &Monitor)> = monitors
         .iter()
-        .filter(|(_, m)| args.outputs.is_empty() || matches(m, &args.outputs))
-        .filter(|(_, m)| !matches(m, &args.exclude))
+        .filter(|(_, m)| cfg.run.outputs.is_empty() || matches(m, &cfg.run.outputs))
+        .filter(|(_, m)| !matches(m, &cfg.run.exclude))
         .collect();
     chosen.sort_by_key(|(_, m)| m.physical_position.x);
     if chosen.is_empty() {
-        error!("no monitor matched {:?} less {:?}; monitors: {:?}", args.outputs, args.exclude, descriptions);
+        error!("no monitor matched {:?} less {:?}; monitors: {:?}", cfg.run.outputs, cfg.run.exclude, descriptions);
         commands.write_message(AppExit::error());
         return;
     }
@@ -83,7 +84,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, canvas: Option<Res<Can
     commands.insert_resource(Canvas(canvas.clone()));
     commands.insert_resource(View { aspect: full.x as f32 / full.y as f32 });
     // The scene, rendered into the canvas first.
-    spawn_camera(&mut commands, RenderTarget::Image(canvas.clone().into()));
+    spawn_camera(&mut commands, &cfg, RenderTarget::Image(canvas.clone().into()));
     // Each display: a window, and a 2D camera on its own render layer
     // showing that display's slice of the canvas, exactly filling the window
     // whatever the window's scale.
@@ -163,11 +164,11 @@ fn regex_escape(s: &str) -> String {
 
 /// Holds the frame rate at --fps by sleeping out the rest of each frame,
 /// when a rate is asked for. Vsync still applies on top.
-fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
-    if args.fps == 0 {
+fn pace(cfg: Res<Config>, mut last: Local<Option<std::time::Instant>>) {
+    if cfg.run.fps == 0 {
         return;
     }
-    let period = std::time::Duration::from_secs_f64(1.0 / args.fps as f64);
+    let period = std::time::Duration::from_secs_f64(1.0 / cfg.run.fps as f64);
     let now = std::time::Instant::now();
     if let Some(prev) = *last {
         let next = prev + period;
@@ -186,7 +187,7 @@ fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
 /// themselves as they open, so the run only ends once none of them has
 /// had it for a moment. And the time limit ends it too: a screensaver
 /// nobody is watching should not go on drawing.
-fn end_on_lock_or_limit(args: Res<Args>, time: Res<Time>, mut focus: MessageReader<WindowFocused>, mut focused: Local<std::collections::HashMap<Entity, bool>>, mut unfocused_since: Local<Option<f32>>, mut exit: MessageWriter<AppExit>) {
+fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut focus: MessageReader<WindowFocused>, mut focused: Local<std::collections::HashMap<Entity, bool>>, mut unfocused_since: Local<Option<f32>>, mut exit: MessageWriter<AppExit>) {
     for f in focus.read() {
         focused.insert(f.window, f.focused);
     }
@@ -205,8 +206,8 @@ fn end_on_lock_or_limit(args: Res<Args>, time: Res<Time>, mut focus: MessageRead
         (false, _) => *unfocused_since = None,
         _ => {}
     }
-    if args.limit > 0.0 && now >= args.limit * 60.0 {
-        info!("ending: time limit of {} minutes", args.limit);
+    if cfg.run.limit > 0.0 && now >= cfg.run.limit * 60.0 {
+        info!("ending: time limit of {} minutes", cfg.run.limit);
         exit.write(AppExit::Success);
     }
 }

@@ -1,0 +1,27 @@
+# onsen-matrix: every setting, at its default. Copy this file to
+# ~/.config/onsen-matrix/config.toml and change what you like; a setting
+# left out keeps its default. The command line overrides the file.
+
+[run]
+fps = 60            # frames per second held; 0 means the display's rate
+limit = 30          # minutes before the run ends on its own; 0 means never
+outputs = []        # displays to cover, e.g. ["desc:LG Electronics"] or ["HDMI-A-1"]; empty means all
+exclude = []        # displays to leave alone, e.g. ["desc:JetKVM"]
+
+[camera]
+walk = 0.2          # units per second forward
+rise = 0.0          # units per second upward
+
+[rain]
+droplets = 1600     # how many droplets are falling at once: the density
+near = 0.3          # units ahead of the camera the rain begins
+far = 14.0          # the furthest, and smallest
+
+[droplet]
+fall = 0.28125      # units per second downward
+spawn = 0.125       # seconds between the glyphs a droplet stamps
+
+[glyph]
+size = 0.03125      # a glyph's height, in units: one unit spans the screen's height one unit ahead
+life = 10.0         # seconds from stamped to gone
+tick = 0.75         # seconds between characters as a glyph fades

@@ -28,6 +28,13 @@ Onsen, an Omarchy edition, where it sits in the Super+Esc menu under
 System. On any Omarchy, a one-line menu extension puts it there too. The
 quickest route of all: point your agent at this repository and ask for it.
 
+## Tune
+
+Copy [`config.toml`](config.toml) to `~/.config/onsen-matrix/` and change
+what you like: how dense the rain is, how fast it falls, the frame rate,
+how far it reaches, how long a run lasts. Every setting is in there at its
+default, explained.
+
 ## More
 
 [ARCHITECTURE.md](ARCHITECTURE.md) is how it works, what every knob does,
