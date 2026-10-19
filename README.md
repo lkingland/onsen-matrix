@@ -1,14 +1,14 @@
 # onsen-matrix
 
-![The rain](https://raw.githubusercontent.com/lkingland/onsen-matrix/assets/onsen-matrix.webp)
+![The rain](https://github.com/user-attachments/assets/2cb1ae1a-afc5-4b34-afc4-fc62477b9a32)
 
-The Matrix's rain, done properly: a three-dimensional space you walk
-through, columns of the Lotus Sutra falling near and far, each character
-glowing like a phosphor tube. One picture across every display you own,
-and it ends the instant you touch anything.
+
+The Matrix the way I remember it: a three-dimensional space you fly
+through, columns of the Lotus Sutra falling like cherry blossoms, each character
+glowing like living code. One scene, spanning every display simultaneously.
 
 Built with no ceiling: Rust on the Bevy engine, one draw call for the whole
-rain, 60 fps on two 4K displays at under half of a GPU.
+rain, 60 fps on three 4K displays at under half of a moderately specced GPU.
 
 ## Install
 
