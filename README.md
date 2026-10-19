@@ -1,6 +1,6 @@
 # onsen-matrix
 
-![The rain](docs/onsen-matrix.webp)
+![The rain](https://raw.githubusercontent.com/lkingland/onsen-matrix/assets/onsen-matrix.webp)
 
 The Matrix's rain, done properly: a three-dimensional space you walk
 through, columns of the Lotus Sutra falling near and far, each character
