@@ -1,6 +1,6 @@
 //! The host side: the canvas and the displays; ending the run on input, on
-//! the session locking, or at the time limit; snapshots for the loop; and
-//! frame-time logging.
+//! losing focus (the session locking), or at the time limit; snapshots for
+//! the loop; and frame-time logging.
 //!
 //! The canvas is one image as wide as every display side by side and as
 //! tall as the tallest. The scene is rendered into it once per frame by
@@ -16,7 +16,7 @@ use bevy::input::mouse::{MouseButtonInput, MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
-use bevy::window::{Monitor, MonitorSelection, WindowMode, WindowRef};
+use bevy::window::{Monitor, MonitorSelection, WindowFocused, WindowMode, WindowRef};
 
 use crate::scene::{spawn_camera, View};
 use crate::Args;
@@ -37,7 +37,6 @@ impl Plugin for HostPlugin {
                 ..default()
             },
         ))
-            .insert_resource(Locked::watch())
             .add_systems(Update, (open_displays, take_focus, end_on_input, end_on_lock_or_limit, snapshot))
             .add_systems(Last, pace);
     }
@@ -181,40 +180,32 @@ fn pace(args: Res<Args>, mut last: Local<Option<std::time::Instant>>) {
     }
 }
 
-/// Whether the session is locked, as a thread finds out every couple of
-/// seconds by asking the shell (Omarchy's `omarchy-shell lock isLocked`),
-/// or logind when there is no such shell. Off the frame's thread, so the
-/// asking never costs a frame.
-#[derive(Resource)]
-struct Locked(std::sync::Arc<std::sync::atomic::AtomicBool>);
-
-impl Locked {
-    fn watch() -> Self {
-        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let shared = flag.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            let ask = |cmd: &str, args: &[&str]| std::process::Command::new(cmd).args(args).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_lowercase());
-            let locked = match ask("omarchy-shell", &["lock", "isLocked"]) {
-                Some(answer) => answer == "true",
-                None => ask("loginctl", &["show-session", "auto", "-p", "LockedHint", "--value"]).is_some_and(|a| a == "yes"),
-            };
-            shared.store(locked, std::sync::atomic::Ordering::Relaxed);
-        });
-        Locked(flag)
+/// Losing focus ends the run: when the session locks, the compositor
+/// takes keyboard focus from every window, and the same happens when
+/// anything else takes the screen. The windows pass focus between
+/// themselves as they open, so the run only ends once none of them has
+/// had it for a moment. And the time limit ends it too: a screensaver
+/// nobody is watching should not go on drawing.
+fn end_on_lock_or_limit(args: Res<Args>, time: Res<Time>, mut focus: MessageReader<WindowFocused>, mut focused: Local<std::collections::HashMap<Entity, bool>>, mut unfocused_since: Local<Option<f32>>, mut exit: MessageWriter<AppExit>) {
+    for f in focus.read() {
+        focused.insert(f.window, f.focused);
     }
-}
-
-/// The session locking ends the run, and so does the time limit: a
-/// screensaver nobody is watching should not go on drawing.
-fn end_on_lock_or_limit(args: Res<Args>, locked: Res<Locked>, time: Res<Time>, mut exit: MessageWriter<AppExit>) {
     if args.hold {
         return;
     }
-    if locked.0.load(std::sync::atomic::Ordering::Relaxed) {
-        info!("ending: session locked");
-        exit.write(AppExit::Success);
-    } else if args.limit > 0.0 && time.elapsed_secs() >= args.limit * 60.0 {
+    let now = time.elapsed_secs();
+    let any = focused.values().any(|&f| f);
+    let had_any = !focused.is_empty();
+    match (had_any && !any, *unfocused_since) {
+        (true, None) => *unfocused_since = Some(now),
+        (true, Some(since)) if now - since > 0.5 && now > 3.0 => {
+            info!("ending: focus lost (the session locked, or something else took the screen)");
+            exit.write(AppExit::Success);
+        }
+        (false, _) => *unfocused_since = None,
+        _ => {}
+    }
+    if args.limit > 0.0 && now >= args.limit * 60.0 {
         info!("ending: time limit of {} minutes", args.limit);
         exit.write(AppExit::Success);
     }
