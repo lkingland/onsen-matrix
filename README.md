@@ -1,7 +1,7 @@
 # onsen-matrix
 
-A screensaver for Hyprland, written to have no ceiling: Rust on the Bevy
-engine. The scene is described at a high level, a glyph here with this
+The screensaver of Onsen (Omarchy: Onsen Edition), and a screensaver for
+any Hyprland, written to have no ceiling: Rust on the Bevy engine. The scene is described at a high level, a glyph here with this
 look, a droplet there with this velocity, the camera with that one, and
 Bevy does the 3D: transforms, projection, batching, bloom. It is being
 built up one small requirement at a time; the aim is a true
@@ -112,9 +112,9 @@ its assets at `ONSEN_MATRIX_ASSETS`, then the installed location, then the
 source tree it was built from. It depends on a Vulkan driver, Wayland,
 Noto Sans CJK and Hyprland, and touches no system configuration.
 
-In the Onsen edition it is opt-in: an "Onsen Matrix" entry under System in
-the Super+Esc menu (a menu extension in the edition's config), shown when
-the package is installed. The stock screensaver stays the default and runs
+In Onsen it is opt-in: an "Onsen Matrix" entry under System in the
+Super+Esc menu (a menu extension in Onsen's config), shown when the
+package is installed. The stock screensaver stays the default and runs
 on idle; this one runs only when chosen. `--app-id` sets the windows'
 class; the default `onsen-matrix` keeps clear of Omarchy's window rules
 for its own screensaver class, which would float the windows.

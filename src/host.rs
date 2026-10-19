@@ -212,6 +212,7 @@ fn end_on_lock_or_limit(args: Res<Args>, time: Res<Time>, mut focus: MessageRead
 }
 
 /// Any key, click, wheel or pointer movement ends the run, unless --hold.
+#[allow(clippy::too_many_arguments)]
 fn end_on_input(args: Res<Args>, mut keys: MessageReader<KeyboardInput>, mut buttons: MessageReader<MouseButtonInput>, mut wheel: MessageReader<MouseWheel>, mut motion: MessageReader<MouseMotion>, mut drifted: Local<Vec2>, mut exit: MessageWriter<AppExit>) {
     *drifted += motion.read().map(|m| m.delta).sum::<Vec2>();
     let key = keys.read().next().map(|k| format!("key {:?}", k.key_code));

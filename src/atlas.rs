@@ -155,12 +155,12 @@ fn edt1d(f: &[f64], d: &mut [f64], v: &mut [usize], z: &mut [f64]) {
         z[k + 1] = f64::INFINITY;
     }
     k = 0;
-    for q in 0..n {
+    for (q, dq) in d.iter_mut().enumerate() {
         while z[k + 1] < q as f64 {
             k += 1;
         }
         let p = v[k];
-        d[q] = (q as f64 - p as f64).powi(2) + f[p];
+        *dq = (q as f64 - p as f64).powi(2) + f[p];
     }
 }
 

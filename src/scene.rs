@@ -168,6 +168,7 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
 /// at the top of the view, somewhere in it, reading from a random place.
 /// The very first fill is spread over the whole height, so the scene starts
 /// full rather than as a line of heads along the top.
+#[allow(clippy::too_many_arguments)]
 fn rain(mut commands: Commands, time: Res<Time>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
     let Some(view) = view else { return };
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
