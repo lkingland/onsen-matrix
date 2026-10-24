@@ -5,7 +5,7 @@
 # The package carries the binary and the assets (the text, the shader) and
 # nothing else; the screensaver touches no system configuration.
 pkgname=onsen-matrix
-pkgver=1.0.0.r77.gba5cf7d8
+pkgver=1.0.0.r78.g5067c7b5
 pkgrel=1
 pkgdesc='A screensaver for Hyprland: a three-dimensional rain of the Lotus Sutra, across every display'
 arch=('x86_64' 'aarch64')

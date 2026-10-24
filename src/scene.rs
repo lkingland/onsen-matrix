@@ -164,10 +164,10 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
     }
 }
 
-/// Keeps `rain.droplets` falling: each one that has gone is replaced by one born
-/// at the top of the view, somewhere in it, reading from a random place.
-/// The very first fill is spread over the whole height, so the scene starts
-/// full rather than as a line of heads along the top.
+/// Keeps `rain.droplets` falling: each one that has gone is replaced by one
+/// born just above the top of the view, at a random depth and place across
+/// it, reading from a random place in the text. The first fill is no
+/// different: the screen starts empty and the rain falls into it.
 #[allow(clippy::too_many_arguments)]
 fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
     let Some(view) = view else { return };
@@ -187,7 +187,6 @@ fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<
         }
         pool.free.push(block);
     }
-    let first_fill = live.is_empty();
     for _ in live.iter().count()..cfg.rain.droplets {
         let Some(block) = pool.free.pop() else { break };
         let ahead = rng.range(cfg.rain.near, cfg.rain.far);
@@ -197,10 +196,9 @@ fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<
         let x = cam.x + rng.range(-half_w, half_w);
         let z = cam.z - ahead;
         let (top, bottom) = (cam.y + half_h + RAIN_MARGIN, cam.y - half_h - RAIN_MARGIN);
-        let y = if first_fill { rng.range(bottom, top) } else { top };
         let start = (rng.next() * rain.text.len() as f32) as usize;
-        rain.records[block * slots] = GlyphRecord { pos: [x, y, z], born: now, start: start as u32, bright: HEAD, white: HEAD_WHITE, kind: look::HEAD };
-        commands.spawn((Droplet { born: now, start, stamped: 0, bottom, block }, Transform::from_xyz(x, y, z), Velocity(Vec3::new(0.0, -cfg.droplet.fall, 0.0))));
+        rain.records[block * slots] = GlyphRecord { pos: [x, top, z], born: now, start: start as u32, bright: HEAD, white: HEAD_WHITE, kind: look::HEAD };
+        commands.spawn((Droplet { born: now, start, stamped: 0, bottom, block }, Transform::from_xyz(x, top, z), Velocity(Vec3::new(0.0, -cfg.droplet.fall, 0.0))));
     }
 }
 
