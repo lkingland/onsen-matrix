@@ -36,6 +36,7 @@ pub struct Camera {
 #[serde(default)]
 pub struct Rain {
     pub droplets: usize,
+    pub rate: f32,
     pub near: f32,
     pub far: f32,
 }
@@ -67,7 +68,7 @@ impl Default for Camera {
 }
 impl Default for Rain {
     fn default() -> Self {
-        Rain { droplets: 1120, near: 0.3, far: 14.0 }
+        Rain { droplets: 1120, rate: 40.0, near: 0.3, far: 14.0 }
     }
 }
 impl Default for Droplet {
@@ -114,7 +115,7 @@ mod tests {
         let d = Config::default();
         assert_eq!((shipped.run.fps, shipped.run.limit, shipped.run.outputs.len()), (d.run.fps, d.run.limit, 0));
         assert_eq!((shipped.camera.walk, shipped.camera.rise), (d.camera.walk, d.camera.rise));
-        assert_eq!((shipped.rain.droplets, shipped.rain.near, shipped.rain.far), (d.rain.droplets, d.rain.near, d.rain.far));
+        assert_eq!((shipped.rain.droplets, shipped.rain.rate, shipped.rain.near, shipped.rain.far), (d.rain.droplets, d.rain.rate, d.rain.near, d.rain.far));
         assert_eq!((shipped.droplet.fall, shipped.droplet.spawn), (d.droplet.fall, d.droplet.spawn));
         assert_eq!((shipped.glyph.size, shipped.glyph.life, shipped.glyph.tick), (d.glyph.size, d.glyph.life, d.glyph.tick));
     }

@@ -164,12 +164,13 @@ fn drift(time: Res<Time>, mut movers: Query<(&mut Transform, &Velocity)>) {
     }
 }
 
-/// Keeps `rain.droplets` falling: each one that has gone is replaced by one
-/// born just above the top of the view, at a random depth and place across
-/// it, reading from a random place in the text. The first fill is no
-/// different: the screen starts empty and the rain falls into it.
+/// Births droplets at `rain.rate` per second while fewer than
+/// `rain.droplets` are falling, each born just above the top of the view at
+/// a random depth and place across it, reading from a random place in the
+/// text. The one rule from the first frame on: the screen starts empty and
+/// the rain falls into it at that rate.
 #[allow(clippy::too_many_arguments)]
-fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut reported: Local<f32>) {
+fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<Res<View>>, mut rng: ResMut<Rng>, mut pool: ResMut<Pool>, mut rain: ResMut<Rain>, cameras: Query<&Transform, With<Walker>>, live: Query<(), With<Droplet>>, mut owed: Local<f32>, mut reported: Local<f32>) {
     let Some(view) = view else { return };
     let slots = pool.slots;
     let Some(cam) = cameras.iter().next().map(|t| t.translation) else { return };
@@ -187,7 +188,12 @@ fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<
         }
         pool.free.push(block);
     }
-    for _ in live.iter().count()..cfg.rain.droplets {
+    // Births owed at the rate, carried across frames; never past the cap.
+    *owed += cfg.rain.rate * time.delta_secs();
+    let room = cfg.rain.droplets.saturating_sub(live.iter().count());
+    let births = (owed.floor() as usize).min(room);
+    *owed -= births as f32;
+    for _ in 0..births {
         let Some(block) = pool.free.pop() else { break };
         let ahead = rng.range(cfg.rain.near, cfg.rain.far);
         // The view at that depth: `ahead` units tall, and as wide as the view's shape makes it.

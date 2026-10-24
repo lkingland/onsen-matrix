@@ -13,7 +13,8 @@ walk = 0.2          # units per second forward
 rise = 0.0          # units per second upward
 
 [rain]
-droplets = 1120     # how many droplets are falling at once: the density
+droplets = 1120     # how many droplets may fall at once: the density
+rate = 40.0         # droplets born per second, from the first frame, while under that
 near = 0.3          # units ahead of the camera the rain begins
 far = 14.0          # the furthest, and smallest
 

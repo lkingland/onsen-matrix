@@ -67,8 +67,10 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 one unit, one unit ahead, span the canvas's height. The camera starts at
 the origin and has a velocity: forward at `camera.walk`, up at `camera.rise`.
 
-**The rain** keeps `rain.droplets` droplets falling in the camera's view:
-from `rain.near` to `rain.far` ahead, at each depth as wide as the view is
+**The rain** births droplets at `rain.rate` per second while fewer than
+`rain.droplets` are falling, from the first frame, so the screen starts
+empty and fills at that rate. They fall in the camera's view: from
+`rain.near` to `rain.far` ahead, at each depth as wide as the view is
 there, born just above the top of the view at that depth and gone below its
 bottom, or once behind the camera. When one goes, another is born somewhere
 in the view, reading from a random place in the text.

@@ -42,8 +42,8 @@ this repository and ask for it.
 ## Tune
 
 Copy [`config.toml`](config.toml) to `~/.config/onsen-matrix/` and change
-what you like: how dense the rain is, how fast it falls, the frame rate,
-how far it reaches, how long a run lasts. Every setting is in there at its
+what you like: how dense the rain is and how fast it gathers, how fast it
+falls, the frame rate, how far it reaches, how long a run lasts. Every setting is in there at its
 default, explained. On the command line, `--outputs`, `--exclude`, `--fps`
 and `--limit` override the file for one run.
 

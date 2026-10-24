@@ -16,7 +16,7 @@ use bevy::input::mouse::{MouseButtonInput, MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
-use bevy::window::{Monitor, MonitorSelection, WindowFocused, WindowMode, WindowRef};
+use bevy::window::{Monitor, MonitorSelection, RawHandleWrapper, WindowFocused, WindowMode, WindowRef};
 
 use crate::config::Config;
 use crate::scene::{spawn_camera, View};
@@ -140,13 +140,9 @@ fn descriptions() -> std::collections::HashMap<String, String> {
 /// does not get focus on Hyprland, so ask for it once the windows are up,
 /// the way Omarchy's own screensaver launcher does. Not when holding, so
 /// the loop does not steal the keyboard.
-fn take_focus(args: Res<Args>, canvas: Option<Res<Canvas>>, mut done: Local<bool>, mut frames: Local<u32>) {
-    if args.hold || *done || canvas.is_none() {
-        return;
-    }
-    // A few frames in, so the windows have mapped.
-    *frames += 1;
-    if *frames < 30 {
+fn take_focus(args: Res<Args>, mut done: Local<bool>, windows: Query<(), (With<Window>, With<RawHandleWrapper>)>) {
+    // Once the windows exist on the compositor, which their handles mark.
+    if args.hold || *done || windows.is_empty() {
         return;
     }
     *done = true;
@@ -199,7 +195,7 @@ fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut 
     let had_any = !focused.is_empty();
     match (had_any && !any, *unfocused_since) {
         (true, None) => *unfocused_since = Some(now),
-        (true, Some(since)) if now - since > 0.5 && now > 3.0 => {
+        (true, Some(since)) if now - since > 0.5 => {
             info!("ending: focus lost (the session locked, or something else took the screen)");
             exit.write(AppExit::Success);
         }
