@@ -11,11 +11,11 @@
 //! is that fraction of the canvas tall. The camera starts at the origin and
 //! has a velocity like anything else.
 //!
-//! The rain falls in the camera's view: from `rain.near` to `rain.far` ahead,
-//! and at each depth as wide as the view is there (RAIN_SPREAD of its
-//! width), born just above the top of the view at that depth and gone
-//! below its bottom, or once behind the camera. There are always
-//! `rain.droplets` of them; when one goes, another is born somewhere in the view.
+//! The rain falls in the camera's view: from `rain.near` to `rain.far`
+//! ahead, at each depth as wide as the view is there, born just above the
+//! top of the view at that depth and gone below its bottom, or once behind
+//! the camera. Droplets are born at `rain.rate` per second while fewer than
+//! `rain.droplets` are falling, from the first frame.
 //!
 //! The settings come from `config.toml`; the rest of the tunables are named
 //! constants below.
@@ -44,7 +44,6 @@ const DECAY: f32 = 6.0;          // e-folds of fading across a life
 const FLOOR: f32 = 0.08;         // the fraction of birth brightness the tail holds at
 
 // -------------------------------------------------------------------- rain
-const RAIN_SPREAD: f32 = 1.0;    // how much of the view's width at a depth the rain covers, 1 = all of it
 const RAIN_MARGIN: f32 = 0.3;    // units above the view a droplet is born, and below it that it dies
 
 /// Records per droplet: its head, and a slot for each glyph that can be
@@ -197,7 +196,7 @@ fn rain(mut commands: Commands, time: Res<Time>, cfg: Res<Config>, view: Option<
         let Some(block) = pool.free.pop() else { break };
         let ahead = rng.range(cfg.rain.near, cfg.rain.far);
         // The view at that depth: `ahead` units tall, and as wide as the view's shape makes it.
-        let half_w = 0.5 * ahead * view.aspect * RAIN_SPREAD;
+        let half_w = 0.5 * ahead * view.aspect;
         let half_h = 0.5 * ahead;
         let x = cam.x + rng.range(-half_w, half_w);
         let z = cam.z - ahead;

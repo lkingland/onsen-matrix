@@ -131,8 +131,6 @@ Onsen's config, run as `onsen-matrix --outputs 'desc:LG Electronics'`.
 ## Known
 
 - Hyprland gives a window on an unfocused monitor 60 fps, and 120 while
-  its monitor is focused; moot at the default 60. `ONSEN_MATRIX_PRESENT`,
-  `ONSEN_MATRIX_LATENCY` and `ONSEN_MATRIX_WINDOWED` exist for pacing
-  experiments.
+  its monitor is focused; moot at the default 60.
 - A 60 Hz display in the set paces every window at 60, which is one reason
   to select displays by make and model.

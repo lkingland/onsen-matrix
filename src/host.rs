@@ -97,9 +97,7 @@ fn open_displays(mut commands: Commands, args: Res<Args>, cfg: Res<Config>, canv
             .spawn(Window {
                 title: format!("onsen-matrix: {name}"),
                 name: Some(args.app_id.clone()),
-                mode: if args.windowed { WindowMode::Windowed } else { WindowMode::BorderlessFullscreen(MonitorSelection::Entity(entity)) },
-                present_mode: args.present_mode,
-                desired_maximum_frame_latency: args.latency,
+                mode: WindowMode::BorderlessFullscreen(MonitorSelection::Entity(entity)),
                 decorations: false,
                 ..default()
             })
@@ -191,16 +189,12 @@ fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut 
         return;
     }
     let now = time.elapsed_secs();
-    let any = focused.values().any(|&f| f);
-    let had_any = !focused.is_empty();
-    match (had_any && !any, *unfocused_since) {
-        (true, None) => *unfocused_since = Some(now),
-        (true, Some(since)) if now - since > 0.5 => {
-            info!("ending: focus lost (the session locked, or something else took the screen)");
-            exit.write(AppExit::Success);
-        }
-        (false, _) => *unfocused_since = None,
-        _ => {}
+    let lost = !focused.is_empty() && !focused.values().any(|&f| f);
+    if !lost {
+        *unfocused_since = None;
+    } else if now - *unfocused_since.get_or_insert(now) > 0.5 {
+        info!("ending: focus lost (the session locked, or something else took the screen)");
+        exit.write(AppExit::Success);
     }
     if cfg.run.limit > 0.0 && now >= cfg.run.limit * 60.0 {
         info!("ending: time limit of {} minutes", cfg.run.limit);
@@ -211,16 +205,15 @@ fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut 
 /// Any key, click, wheel or pointer movement ends the run, unless --hold.
 #[allow(clippy::too_many_arguments)]
 fn end_on_input(args: Res<Args>, mut keys: MessageReader<KeyboardInput>, mut buttons: MessageReader<MouseButtonInput>, mut wheel: MessageReader<MouseWheel>, mut motion: MessageReader<MouseMotion>, mut drifted: Local<Vec2>, mut exit: MessageWriter<AppExit>) {
+    if args.hold {
+        return;
+    }
     *drifted += motion.read().map(|m| m.delta).sum::<Vec2>();
-    let key = keys.read().next().map(|k| format!("key {:?}", k.key_code));
-    let why = key
+    let why = keys.read().next().map(|k| format!("key {:?}", k.key_code))
         .or_else(|| buttons.read().next().map(|b| format!("button {:?}", b.button)))
         .or_else(|| wheel.read().next().map(|_| "wheel".to_string()))
         .or_else(|| (drifted.length() > POINTER_SLACK).then(|| format!("pointer moved {:.0} px", drifted.length())));
     if let Some(why) = why {
-        if args.hold {
-            return;
-        }
         info!("ending: {why}");
         exit.write(AppExit::Success);
     }

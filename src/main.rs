@@ -1,19 +1,16 @@
 //! onsen-matrix: a screensaver, as a Bevy scene.
 //!
-//! The scene is small and high level (`scene.rs`). A Glyph is a quad with
-//! the tube look on it, at a point in space, fading. A Droplet is a point
+//! The scene is small and high level (`scene.rs`). A Droplet is a point
 //! with a velocity that carries a bright head glyph and stamps glyphs
-//! behind it as it reads the text. The rain keeps a number of droplets
-//! falling in a box that follows the camera, which has a velocity too.
-//! Bevy does the rest: transforms, projection, instancing, bloom.
-//!
-//! The settings come from `config.toml` (`config.rs`), overridden by the
-//! command line.
-//!
-//! The look (`look.rs`) is one material on one quad, shared by every glyph,
-//! with the per-glyph character and brightness packed into the instance's
-//! tag; its shader is `assets/shaders/glyph.wesl`, hot-reloaded on save.
-//! The characters come from a signed-distance atlas (`atlas.rs`).
+//! behind it as it reads the text; the rain births droplets at a steady
+//! rate into the camera's view, and the camera has a velocity too. Glyphs
+//! are records in one buffer, drawn all at once by one material whose
+//! shader works out each glyph's fade and character from the clock
+//! (`look.rs`, `assets/shaders/glyph.wesl`, hot-reloaded on save). The
+//! characters come from a signed-distance atlas (`atlas.rs`). The host
+//! (`host.rs`) renders the scene once into a canvas as wide as every
+//! display and shows each display its slice. The settings come from
+//! `config.toml` (`config.rs`), overridden by the command line.
 
 mod atlas;
 mod config;
@@ -23,7 +20,7 @@ mod look;
 mod scene;
 
 use bevy::prelude::*;
-use bevy::window::{ExitCondition, PresentMode};
+use bevy::window::ExitCondition;
 
 /// The command line and environment: the switches that are not settings.
 /// `--outputs`, `--exclude`, `--fps` and `--limit` override the config.
@@ -34,10 +31,6 @@ pub struct Args {
     pub app_id: String,
     /// `--hold`: never end on input, for iterating.
     pub hold: bool,
-    /// How each window is presented: vsync unless a pacing knob says otherwise.
-    pub present_mode: PresentMode,
-    pub latency: Option<std::num::NonZero<u32>>,
-    pub windowed: bool,
     /// `ONSEN_MATRIX_SNAP=PATH`: while that file exists, the next frame is
     /// written to the file it names (PNG) and the request removed.
     pub snap: Option<std::path::PathBuf>,
@@ -75,17 +68,7 @@ fn log_to_file_when_detached() {
 
 fn main() {
     log_to_file_when_detached();
-    // Diagnostics knobs, for chasing frame pacing without a rebuild.
-    let env = |k: &str| std::env::var(k).ok();
     let value = |name: &str| std::env::args().skip_while(|a| a != name).nth(1);
-    let latency = env("ONSEN_MATRIX_LATENCY").and_then(|v| v.parse().ok()).and_then(std::num::NonZero::new);
-    let windowed = env("ONSEN_MATRIX_WINDOWED").is_some();
-    let present_mode = match env("ONSEN_MATRIX_PRESENT").as_deref() {
-        Some("novsync") => PresentMode::AutoNoVsync,
-        Some("immediate") => PresentMode::Immediate,
-        Some("mailbox") => PresentMode::Mailbox,
-        _ => PresentMode::AutoVsync,
-    };
     let mut config = config::Config::load();
     let list = |v: String| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect::<Vec<_>>();
     if let Some(v) = value("--outputs") {
@@ -103,10 +86,7 @@ fn main() {
     let args = Args {
         app_id: value("--app-id").unwrap_or_else(|| "onsen-matrix".into()),
         hold: std::env::args().any(|a| a == "--hold"),
-        present_mode,
-        latency,
-        windowed,
-        snap: env("ONSEN_MATRIX_SNAP").map(Into::into),
+        snap: std::env::var("ONSEN_MATRIX_SNAP").ok().map(Into::into),
     };
     App::new()
         .insert_resource(args)
