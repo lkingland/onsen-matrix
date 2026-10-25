@@ -14,7 +14,7 @@ One scene, spanning every display at once. Built with no ceiling: Rust on the Be
 - **The Lotus Sutra as living code.** The Hōben and Juryō chapters in Kumārajīva's Chinese: 744 characters, each glyph reading on as it fades.
 - **Phosphor, not pixels.** Every character glows like a tube: a soft aura, scattered light and a sharp core, under an aperture grille and rolling scanlines.
 - **One picture across every display.** All your screens become one canvas with no seam. Choose them by make and model, not by which port they're in.
-- **Gone the instant you touch anything.** Any key, click, scroll or pointer movement ends it, and so does the session lock. It also stops itself after half an hour.
+- **Gone the instant you touch anything.** Any key but the now-playing panel's, any click, scroll or pointer movement ends it, and so does the session lock. It also stops itself after half an hour.
 - **What's playing, in the picture.** The track your browser or player is on, with its thumbnail, title, artist and position, fading in at the bottom centre when the track changes and out again after ten seconds, read the way the Omarchy bar reads it. Space brings it back; with it there, Space plays or pauses, the arrows skip, Shift+Space sends it away. One line in the config turns it off.
 - **Light on the machine.** It polls nothing, and the whole rain is a single draw.
 - **Tuned in one file.** Density, speed, depth, frame rate and run length all live in one commented config.
@@ -81,9 +81,11 @@ one build dependency (`cargo`), `-i` installs the result with pacman. Inside:
   is the menu's case, to `~/.local/state/onsen-matrix/log`, overwritten each
   run. The `rain:` lines and the reason the run ended are there.
 - **While it runs** it holds a Wayland idle inhibitor on its window, so the
-  stock screensaver and the lock do not fire over it. It ends on any key,
-  click, scroll or pointer movement, on losing focus (which is what the lock
-  does to every window), or at the half-hour limit, after which idle resumes.
+  stock screensaver and the lock do not fire over it. It ends on any key
+  but the panel's (Space, and the arrows and Shift+Space while the panel
+  is in), on any click, scroll or pointer movement, on losing focus (which
+  is what the lock does to every window), or at the half-hour limit, after
+  which idle resumes.
   Its window class is `onsen-matrix`, not Omarchy's screensaver class, so
   Omarchy's own screensaver machinery neither launches it nor kills it.
 
@@ -112,9 +114,34 @@ One nuance of the version label: the package is built from the **working
 tree**, but named after **`HEAD`**. With uncommitted changes the package
 contains them while its label points at the last commit (`bin/install`
 warns). Commit first, then install, and the label and the contents agree.
-In a jj colocated checkout, `HEAD` is the working-copy commit jj exports,
-which may be on no bookmark; that is fine, the hash still names the exact
-tree.
+In a jj colocated checkout, git's `HEAD` is the parent of jj's working-copy
+commit (`@-`), so what jj holds in `@` is in the package and not in its
+label until it is squashed or described into a commit of its own; a
+bookmark is not needed, the hash alone names the tree.
+
+### Notes between sessions
+
+Left here by the session that built the panel, for the one that wrote the
+install section, after checking it against the PKGBUILD, the Onsen
+checkout and a jj log. Everything checked holds: the seven files, the
+computed version, the menu extension's `when`, the `local:` declaration.
+Three things changed or are open:
+
+1. **Changed:** two sentences still said any key ends the run. Since the
+   panel's keys (`src/input.rs`) that is "any key but the panel's"; both
+   now say so. The What-it-is bullet and the launch section.
+2. **Changed:** the jj sentence said `HEAD` is the working-copy commit jj
+   exports. On this machine `jj log` shows git's `HEAD` at `@-`, the
+   working copy's parent, so a change still in `@` is built but not named;
+   the sentence now says that. Please confirm that matches your reading.
+3. **Open:** "the shell reads menu extensions live, so a change to the
+   file lands the moment it is saved" is not something this session could
+   verify; it is stated as Onsen's behaviour and left as written.
+
+Status as of this note: `pacman -Q onsen-matrix` still says
+`1.0.0.r80.g28cf6ccf`, the build before the panel. `bin/install` needs the
+sudo password, so it has not been run from a session; it is the next step
+before the acceptance test, and it rebuilds from the current commit.
 
 ## Pairs with Omarchy
 
