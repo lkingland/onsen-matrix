@@ -60,12 +60,16 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 - `src/input.rs`: what a key or the pointer asks of the run, as one
   `Action` per press: the end, or one of the now-playing panel's. The key
   table is one function; the panel says whether it has the keys.
-- `src/media.rs`: what is playing, at the bottom centre of the picture:
+- `src/media/`: what is playing, at the bottom centre of the picture:
   the thumbnail, title, artist and position, in for a while after a track
-  change or a key, with a fade. Bevy UI targeted at the scene's camera, so
-  it is laid out over the whole canvas and drawn into it after bloom and
-  tone mapping, sized by the canvas's height, set in the atlas's font.
-  `[media]` in the config turns it off, sizes it and times it.
+  change or a key, with a fade. `mod.rs` is the Bevy side: the nodes, and
+  the systems that follow the watcher, act on the keys, and paint;
+  `presence.rs` is whether the panel is there, a state machine with a
+  clock handed in; `images.rs` draws the play and pause marks and decodes
+  the thumbnail. Bevy UI targeted at the scene's camera, so it is laid out
+  over the whole canvas and drawn into it after bloom and tone mapping,
+  sized by the canvas's height, set in the atlas's font. `[media]` in the
+  config turns it off, sizes it and times it.
 - `crates/nowplaying`: the library behind it, with no Bevy in it. It
   watches the session bus for media players the way the Omarchy bar does
   (every player speaks MPRIS, `org.mpris.MediaPlayer2.*` on D-Bus: Brave for
@@ -150,6 +154,12 @@ pressed. Keys are read by what they mean (the logical key, after the
 layout), and Shift from the key stream in order, so a chord reads the
 same on any keyboard, virtual ones included. The table is `action` in
 `src/input.rs`, and nothing else decides what a key does.
+
+How the parts hang together: `input.rs` knows one thing about the panel,
+whether it has the keys (`Focus`), and the panel knows one thing about the
+input, the actions it listens for. The host ends the run on the End action
+and knows nothing of the panel. The `nowplaying` crate knows nothing of
+any of them.
 
 ## The characters
 
