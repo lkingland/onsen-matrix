@@ -94,7 +94,7 @@ impl Default for Glyph {
 }
 impl Default for Media {
     fn default() -> Self {
-        Media { show: true, size: 0.043, margin: 0.05, hold: 10.0, fade: 0.6 }
+        Media { show: true, size: 0.052, margin: 0.05, hold: 10.0, fade: 0.6 }
     }
 }
 

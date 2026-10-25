@@ -29,7 +29,7 @@ tick = 0.75         # seconds between characters as a glyph fades
 
 [media]
 show = true         # what is playing, at the bottom centre: thumbnail, title, artist, position
-size = 0.043        # the thumbnail's height, as a fraction of the screen's; the text scales with it
+size = 0.052        # the thumbnail's height, as a fraction of the screen's; the text scales with it
 margin = 0.05       # the gap below it, as a fraction of the screen's height
 hold = 10.0         # seconds it stays after a track change before fading out
 fade = 0.6          # seconds a fade in or out takes

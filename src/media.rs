@@ -38,13 +38,13 @@ use crate::scene::Walker;
 // sets as a fraction of the canvas's.
 const TITLE: f32 = 0.26;      // the title's text height
 const ARTIST: f32 = 0.19;     // the artist's
-const DETAIL: f32 = 0.13;     // the position line's
+const DETAIL: f32 = 0.17;     // the position line's
 const GAP: f32 = 0.16;        // between the thumbnail and the text
 const LEADING: f32 = 0.06;    // between the lines
 const TITLE_COLOUR: Color = Color::srgb(0.92, 1.0, 0.94);
 const ARTIST_COLOUR: Color = Color::srgb(0.55, 0.9, 0.65);
 const DETAIL_COLOUR: Color = Color::srgb(0.35, 0.55, 0.42);
-const MARK: f32 = 0.13;       // the play or pause mark's height, before the position
+const MARK: f32 = 0.17;       // the play or pause mark's height, before the position
 /// The marks' texture side, in pixels; they are drawn at startup.
 const MARK_PIXELS: u32 = 64;
 /// Frames to keep trying a thumbnail the player has named but not finished
