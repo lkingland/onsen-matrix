@@ -13,6 +13,8 @@ if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
   echo "note: the checkout has uncommitted changes; the package is built from them but named after the last commit" >&2
 fi
 # -f: build even when a package of this version is already here.
-makepkg -D pkg -sif
+# --noconfirm: pacman asks "Proceed?" otherwise, which an unattended run (an
+# agent, a script) cannot answer; sudo itself asks nothing here.
+makepkg -D pkg -sif --noconfirm
 rm -f pkg/*.pkg.tar.*
 echo "installed: $(pacman -Q onsen-matrix)  (checkout: $(git rev-parse --short=8 HEAD))"
