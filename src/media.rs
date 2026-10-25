@@ -12,9 +12,12 @@
 //! atlas's own font, so a title in any script the sutra's font covers is
 //! shown.
 //!
-//! Nothing here reaches the bus. The watcher's change counter says when to
-//! redraw the text; the position is carried forward by the watcher and
-//! only read once a frame.
+//! The panel is not always there. It fades in when the track changes,
+//! stays `[media] hold` seconds, and fades out again, each fade taking
+//! `[media] fade` seconds; that is `Presence`, a small state machine with
+//! no Bevy in it. Nothing here reaches the bus. The watcher's change
+//! counter says when to redraw the text; the position is carried forward
+//! by the watcher and only read once a frame.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
@@ -51,7 +54,7 @@ impl Plugin for MediaPlugin {
             Update,
             (
                 open_panel.run_if(resource_exists::<Player>).run_if(not(resource_exists::<Shown>)),
-                (follow, load_art, tick_position).run_if(resource_exists::<Shown>),
+                (follow, load_art, tick_position, fade).chain().run_if(resource_exists::<Shown>),
             ),
         );
     }
@@ -70,7 +73,51 @@ struct PanelFont(Handle<Font>);
 #[derive(Resource, Default)]
 struct Shown {
     generation: Option<u64>,
+    /// The track on screen, by what identifies it to the eye; a change
+    /// brings the panel in.
+    track: Option<(String, String, String)>,
     art: Art,
+    presence: Presence,
+}
+
+/// Whether the panel is there: shown for a while after a change, then
+/// gone, with a fade either way. `alpha` is what is drawn; `wanted` is
+/// where it is heading, which is also what "visible" means to anything
+/// that asks.
+#[derive(Default, Debug, PartialEq)]
+struct Presence {
+    wanted: bool,
+    alpha: f32,
+    /// When to start fading out, on the clock `tick` is given.
+    hide_at: Option<f32>,
+}
+
+impl Presence {
+    /// Brings the panel in, or keeps it, until `hold` seconds from `now`.
+    fn show(&mut self, now: f32, hold: f32) {
+        self.wanted = true;
+        self.hide_at = Some(now + hold);
+    }
+
+    /// Sends the panel out now.
+    fn hide(&mut self) {
+        self.wanted = false;
+        self.hide_at = None;
+    }
+
+    /// A frame: the hold expiring, and the alpha moving toward what is
+    /// wanted over `fade` seconds. Returns whether the alpha moved.
+    fn tick(&mut self, now: f32, dt: f32, fade: f32) -> bool {
+        if self.hide_at.is_some_and(|at| now >= at) {
+            self.hide();
+        }
+        let target = if self.wanted { 1.0 } else { 0.0 };
+        let step = if fade > 0.0 { dt / fade } else { 1.0 };
+        let next = if target > self.alpha { (self.alpha + step).min(target) } else { (self.alpha - step).max(target) };
+        let moved = next != self.alpha;
+        self.alpha = next;
+        moved
+    }
 }
 
 /// The thumbnail: none, one still being read, or the one on screen. Each
@@ -148,9 +195,9 @@ fn open_panel(mut commands: Commands, cfg: Res<Config>, font: Option<Res<PanelFo
     commands.init_resource::<Shown>();
 }
 
-/// When the watcher's change counter moves: the lines, the panel's
-/// visibility, and the thumbnail to load.
-fn follow(player: Res<Player>, mut shown: ResMut<Shown>, mut panel: Query<&mut Node, With<Panel>>, mut lines: Query<(&Line, &mut Text)>) {
+/// When the watcher's change counter moves: the lines, the thumbnail to
+/// load, and whether the track changed, which brings the panel in.
+fn follow(player: Res<Player>, cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut lines: Query<(&Line, &mut Text)>) {
     let generation = player.0.generation();
     if shown.generation == Some(generation) {
         return;
@@ -158,8 +205,14 @@ fn follow(player: Res<Player>, mut shown: ResMut<Shown>, mut panel: Query<&mut N
     shown.generation = Some(generation);
     let status = player.0.status();
     let track = status.as_ref().and_then(|s| s.track.as_ref());
-    for mut node in &mut panel {
-        node.display = if track.is_some() { Display::Flex } else { Display::None };
+    // A different track, or none any more: the panel comes in, or goes.
+    let key = track.map(|t| (t.title.clone(), t.artist.clone(), t.art_url.clone()));
+    if key != shown.track {
+        shown.track = key;
+        match track {
+            Some(_) => shown.presence.show(time.elapsed_secs(), cfg.media.hold),
+            None => shown.presence.hide(),
+        }
     }
     set(&mut lines, Line::Title, track.map(|t| t.title.as_str()).unwrap_or(""));
     set(&mut lines, Line::Artist, track.map(|t| t.artist.as_str()).unwrap_or(""));
@@ -200,6 +253,29 @@ fn load_art(mut shown: ResMut<Shown>, mut images: ResMut<Assets<Image>>, mut art
     };
     for mut node in &mut art {
         node.image = handle.clone();
+    }
+}
+
+/// The fade, applied: the alpha on every colour, and the row laid out only
+/// while there is something to see.
+fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut panel: Query<&mut Node, With<Panel>>, mut art: Query<&mut ImageNode, With<ArtNode>>, mut lines: Query<(&Line, &mut TextColor)>) {
+    if !shown.presence.tick(time.elapsed_secs(), time.delta_secs(), cfg.media.fade) {
+        return;
+    }
+    let alpha = shown.presence.alpha;
+    for mut node in &mut panel {
+        node.display = if alpha > 0.0 { Display::Flex } else { Display::None };
+    }
+    for mut node in &mut art {
+        node.color = Color::WHITE.with_alpha(alpha);
+    }
+    for (line, mut colour) in &mut lines {
+        let base = match line {
+            Line::Title => TITLE_COLOUR,
+            Line::Artist => ARTIST_COLOUR,
+            Line::Detail => DETAIL_COLOUR,
+        };
+        colour.0 = base.with_alpha(alpha);
     }
 }
 
@@ -251,6 +327,47 @@ fn set(lines: &mut Query<(&Line, &mut Text)>, line: Line, value: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presence_comes_in_holds_and_goes() {
+        let mut p = Presence::default();
+        assert!(!p.wanted);
+        p.show(0.0, 10.0);
+        assert!(p.wanted);
+        // In over 0.5 s, by frames of a tenth.
+        assert!(p.tick(0.1, 0.1, 0.5));
+        assert!((p.alpha - 0.2).abs() < 1e-6);
+        for i in 2..=5 {
+            p.tick(0.1 * i as f32, 0.1, 0.5);
+        }
+        assert_eq!(p.alpha, 1.0);
+        assert!(!p.tick(1.0, 0.1, 0.5), "steady while held");
+        // The hold expires: out again, to nothing.
+        assert!(p.tick(10.0, 0.1, 0.5));
+        assert!(!p.wanted);
+        for i in 1..=10 {
+            p.tick(10.0 + 0.1 * i as f32, 0.1, 0.5);
+        }
+        assert_eq!(p.alpha, 0.0);
+        assert!(!p.tick(12.0, 0.1, 0.5));
+    }
+
+    #[test]
+    fn a_change_mid_fade_turns_it_round_and_hide_is_immediate() {
+        let mut p = Presence::default();
+        p.show(0.0, 1.0);
+        p.tick(0.1, 0.1, 0.5);
+        p.tick(1.0, 0.1, 0.5); // the hold is up: heading out
+        assert!(!p.wanted);
+        p.show(1.1, 1.0);
+        assert!(p.wanted);
+        p.tick(1.2, 0.1, 0.5);
+        assert!(p.alpha > 0.0);
+        p.hide();
+        assert!(!p.wanted);
+        p.tick(1.3, 0.1, 0.0); // no fade: straight to nothing
+        assert_eq!(p.alpha, 0.0);
+    }
 
     #[test]
     fn clock_reads_as_a_player_shows_it() {

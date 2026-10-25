@@ -63,6 +63,8 @@ pub struct Media {
     pub show: bool,
     pub size: f32,
     pub margin: f32,
+    pub hold: f32,
+    pub fade: f32,
 }
 
 impl Default for Run {
@@ -92,7 +94,7 @@ impl Default for Glyph {
 }
 impl Default for Media {
     fn default() -> Self {
-        Media { show: true, size: 0.043, margin: 0.05 }
+        Media { show: true, size: 0.043, margin: 0.05, hold: 10.0, fade: 0.6 }
     }
 }
 
@@ -133,6 +135,7 @@ mod tests {
         assert_eq!((shipped.droplet.fall, shipped.droplet.spawn), (d.droplet.fall, d.droplet.spawn));
         assert_eq!((shipped.glyph.size, shipped.glyph.life, shipped.glyph.tick), (d.glyph.size, d.glyph.life, d.glyph.tick));
         assert_eq!((shipped.media.show, shipped.media.size, shipped.media.margin), (d.media.show, d.media.size, d.media.margin));
+        assert_eq!((shipped.media.hold, shipped.media.fade), (d.media.hold, d.media.fade));
     }
 
     #[test]
