@@ -14,7 +14,7 @@ One scene, spanning every display at once. Built with no ceiling: Rust on the Be
 - **The Lotus Sutra as living code.** The Hōben and Juryō chapters in Kumārajīva's Chinese: 744 characters, each glyph reading on as it fades.
 - **Phosphor, not pixels.** Every character glows like a tube: a soft aura, scattered light and a sharp core, under an aperture grille and rolling scanlines.
 - **One picture across every display.** All your screens become one canvas with no seam. Choose them by make and model, not by which port they're in.
-- **Gone the instant you touch anything.** Any key but the now-playing panel's, any click, scroll or pointer movement ends it, and so does the session lock. After half an hour it hands the screen to the session lock, which turns the displays off.
+- **Gone the instant you touch anything.** Any key but the now-playing panel's, any click, scroll or pointer movement ends it, and so does the session lock. After half an hour it locks the session and turns the displays off, in that order and at once; the first touch afterwards wakes them into the lock screen.
 - **What's playing, in the picture.** The track your browser or player is on, with its thumbnail, title, artist and position, fading in at the bottom centre when the track changes and out again after ten seconds, read the way the Omarchy bar reads it. Space brings it back; with it there, Space plays or pauses, the arrows skip, Shift+Space sends it away. One line in the config turns it off.
 - **Light on the machine.** It polls nothing, and the whole rain is a single draw.
 - **Tuned in one file.** Density, speed, depth, frame rate and run length all live in one commented config.
@@ -86,11 +86,13 @@ one build dependency (`cargo`), `-i` installs the result with pacman. Inside:
   is in), on any click, scroll or pointer movement, on losing focus (which
   is what the lock does to every window), or at the half-hour limit. At
   the limit it first runs the command `run.then` names in the config: by
-  default `omarchy-system-lock`, the session lock, whose own blanking turns
-  the displays off five seconds later. Without that hand-over the idle
-  timers the run held back would start again from zero, and the displays
-  would stay lit through the stock screensaver until Omarchy's own lock
-  time. Set `then = ""` to just stop.
+  default the session lock, a one-second settle, then the display-off
+  command, so the outputs get no signal at all from the moment the run
+  ends, and the first touch afterwards wakes them into the lock screen.
+  (Omarchy's own lock would show its lock screen for five seconds before
+  blanking.) Without the hand-over the idle timers the run held back would
+  start again from zero, and the displays would stay lit through the stock
+  screensaver until Omarchy's own lock time. Set `then = ""` to just stop.
   Its window class is `onsen-matrix`, not Omarchy's screensaver class, so
   Omarchy's own screensaver machinery neither launches it nor kills it.
 

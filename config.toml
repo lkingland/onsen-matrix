@@ -5,7 +5,9 @@
 [run]
 fps = 60            # frames per second held; 0 means the display's rate
 limit = 30          # minutes before the run ends on its own; 0 means never
-then = "omarchy-system-lock"  # run when the limit ends the run: the session lock, which blanks the displays; "" to just stop
+then = "omarchy-system-lock && sleep 1 && omarchy-brightness-display off"
+                    # run when the limit ends the run: lock the session and turn the displays off at once,
+                    # so the first touch afterwards wakes them into the lock screen; "" to just stop
 outputs = []        # displays to cover, e.g. ["desc:LG Electronics"] or ["HDMI-A-1"]; empty means all
 exclude = []        # displays to leave alone, e.g. ["desc:JetKVM"]
 

@@ -177,9 +177,9 @@ fn pace(cfg: Res<Config>, mut last: Local<Option<std::time::Instant>>) {
 /// themselves as they open, so the run only ends once none of them has
 /// had it for a moment. And the time limit ends it too: a screensaver
 /// nobody is watching should not go on drawing. At the limit it first
-/// runs whatever `run.then` names, the session lock by default, whose own
-/// blanking then turns the displays off; the idle timers the run held
-/// back would otherwise start again from zero at this point.
+/// runs whatever `run.then` names, by default the session lock and then
+/// the display-off command, so the outputs go dark at once; the idle
+/// timers the run held back would otherwise start again from zero here.
 fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut focus: MessageReader<WindowFocused>, mut focused: Local<std::collections::HashMap<Entity, bool>>, mut unfocused_since: Local<Option<f32>>, mut exit: MessageWriter<AppExit>) {
     for f in focus.read() {
         focused.insert(f.window, f.focused);

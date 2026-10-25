@@ -70,7 +70,7 @@ pub struct Media {
 
 impl Default for Run {
     fn default() -> Self {
-        Run { fps: 60, limit: 30.0, then: "omarchy-system-lock".into(), outputs: vec![], exclude: vec![] }
+        Run { fps: 60, limit: 30.0, then: "omarchy-system-lock && sleep 1 && omarchy-brightness-display off".into(), outputs: vec![], exclude: vec![] }
     }
 }
 impl Default for Camera {
