@@ -44,6 +44,9 @@ const LEADING: f32 = 0.06;    // between the lines
 const TITLE_COLOUR: Color = Color::srgb(0.92, 1.0, 0.94);
 const ARTIST_COLOUR: Color = Color::srgb(0.55, 0.9, 0.65);
 const DETAIL_COLOUR: Color = Color::srgb(0.35, 0.55, 0.42);
+const MARK: f32 = 0.13;       // the play or pause mark's height, before the position
+/// The marks' texture side, in pixels; they are drawn at startup.
+const MARK_PIXELS: u32 = 64;
 /// Frames to keep trying a thumbnail the player has named but not finished
 /// writing: a browser announces the track before the file is complete.
 const ART_RETRIES: u32 = 120;
@@ -72,6 +75,13 @@ struct Player(Watcher);
 /// The panel's font: the atlas's, as a text asset. Absent if it did not load.
 #[derive(Resource)]
 struct PanelFont(Handle<Font>);
+
+/// The play and pause marks, as the usual triangle and two bars.
+#[derive(Resource)]
+struct Marks {
+    playing: Handle<Image>,
+    paused: Handle<Image>,
+}
 
 /// What the panel shows, so only what changed is redrawn. Present once the
 /// panel has been spawned.
@@ -152,6 +162,10 @@ struct Panel;
 #[derive(Component)]
 struct ArtNode;
 
+/// The play or pause mark's node, before the position.
+#[derive(Component)]
+struct MarkNode;
+
 /// Which line of text a node shows.
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 enum Line {
@@ -160,8 +174,9 @@ enum Line {
     Detail,
 }
 
-/// Connects to the bus and loads the font, when the panel is wanted.
-fn start(mut commands: Commands, cfg: Res<Config>, mut fonts: ResMut<Assets<Font>>) {
+/// Connects to the bus, loads the font and draws the marks, when the
+/// panel is wanted.
+fn start(mut commands: Commands, cfg: Res<Config>, mut fonts: ResMut<Assets<Font>>, mut images: ResMut<Assets<Image>>) {
     if !cfg.media.show {
         return;
     }
@@ -169,6 +184,7 @@ fn start(mut commands: Commands, cfg: Res<Config>, mut fonts: ResMut<Assets<Font
         Ok(watcher) => commands.insert_resource(Player(watcher)),
         Err(e) => return warn!("media: nothing shown: {e}"),
     }
+    commands.insert_resource(Marks { playing: images.add(mark(true)), paused: images.add(mark(false)) });
     match std::fs::read(atlas::FONT) {
         Ok(bytes) => commands.insert_resource(PanelFont(fonts.add(Font::from_bytes(bytes)))),
         Err(e) => warn!("media: {}: {e}; the panel's text is in Bevy's own font", atlas::FONT),
@@ -177,7 +193,7 @@ fn start(mut commands: Commands, cfg: Res<Config>, mut fonts: ResMut<Assets<Font
 
 /// The panel, once the scene's camera exists to draw it on: a row at the
 /// bottom centre, the thumbnail then the lines, all sized by the height.
-fn open_panel(mut commands: Commands, cfg: Res<Config>, font: Option<Res<PanelFont>>, cameras: Query<Entity, With<Walker>>) {
+fn open_panel(mut commands: Commands, cfg: Res<Config>, font: Option<Res<PanelFont>>, marks: Res<Marks>, cameras: Query<Entity, With<Walker>>) {
     let Some(camera) = cameras.iter().next() else { return };
     let vh = |f: f32| Val::Vh(100.0 * cfg.media.size * f);
     let font = font.map(|f| FontSource::Handle(f.0.clone())).unwrap_or_default();
@@ -192,7 +208,17 @@ fn open_panel(mut commands: Commands, cfg: Res<Config>, font: Option<Res<PanelFo
                 (ArtNode, ImageNode::default(), Node { width: vh(1.0), height: vh(1.0), flex_shrink: 0.0, ..default() }),
                 (
                     Node { flex_direction: FlexDirection::Column, row_gap: vh(LEADING), ..default() },
-                    children![line(Line::Title, TITLE, TITLE_COLOUR), line(Line::Artist, ARTIST, ARTIST_COLOUR), line(Line::Detail, DETAIL, DETAIL_COLOUR)],
+                    children![
+                        line(Line::Title, TITLE, TITLE_COLOUR),
+                        line(Line::Artist, ARTIST, ARTIST_COLOUR),
+                        (
+                            Node { column_gap: vh(MARK * 0.6), align_items: AlignItems::Center, ..default() },
+                            children![
+                                (MarkNode, ImageNode { image: marks.playing.clone(), color: DETAIL_COLOUR, ..default() }, Node { width: vh(MARK), height: vh(MARK), ..default() }),
+                                line(Line::Detail, DETAIL, DETAIL_COLOUR),
+                            ],
+                        ),
+                    ],
                 ),
             ],
         )],
@@ -288,7 +314,8 @@ fn act(player: Res<Player>, cfg: Res<Config>, time: Res<Time>, mut shown: ResMut
 
 /// The fade, applied: the alpha on every colour, the row laid out only
 /// while there is something to see, and the keys claimed while it is in.
-fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut focus: ResMut<Focus>, mut panel: Query<&mut Node, With<Panel>>, mut art: Query<&mut ImageNode, With<ArtNode>>, mut lines: Query<(&Line, &mut TextColor)>) {
+#[allow(clippy::too_many_arguments)]
+fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut focus: ResMut<Focus>, mut panel: Query<&mut Node, With<Panel>>, mut art: Query<&mut ImageNode, (With<ArtNode>, Without<MarkNode>)>, mut mark: Query<&mut ImageNode, With<MarkNode>>, mut lines: Query<(&Line, &mut TextColor)>) {
     let moved = shown.presence.tick(time.elapsed_secs(), time.delta_secs(), cfg.media.fade);
     if focus.media != shown.presence.wanted {
         focus.media = shown.presence.wanted;
@@ -302,6 +329,9 @@ fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut focus: 
     }
     for mut node in &mut art {
         node.color = Color::WHITE.with_alpha(alpha);
+    }
+    for mut node in &mut mark {
+        node.color = DETAIL_COLOUR.with_alpha(alpha);
     }
     for (line, mut colour) in &mut lines {
         let base = match line {
@@ -325,23 +355,63 @@ fn decode(path: &std::path::Path) -> Result<Image, String> {
     Image::from_buffer(&bytes, ImageType::Extension(ext), CompressedImageFormats::NONE, true, ImageSampler::linear(), RenderAssetUsages::RENDER_WORLD).map_err(|e| e.to_string())
 }
 
-/// The position line, from the carried-forward position: it changes once a
-/// second, and the text is only touched then.
-fn tick_position(player: Res<Player>, mut lines: Query<(&Line, &mut Text)>) {
-    let line = match player.0.status() {
-        Some(s) if s.track.is_some() => detail(&s),
-        _ => String::new(),
-    };
-    set(&mut lines, Line::Detail, &line);
+/// The position line and the mark before it, from the carried-forward
+/// position: the text changes once a second and is only touched then.
+fn tick_position(player: Res<Player>, marks: Res<Marks>, mut lines: Query<(&Line, &mut Text)>, mut mark: Query<&mut ImageNode, With<MarkNode>>) {
+    let status = player.0.status().filter(|s| s.track.is_some());
+    set(&mut lines, Line::Detail, &status.as_ref().map(detail).unwrap_or_default());
+    let wanted = if status.is_some_and(|s| s.playing()) { &marks.playing } else { &marks.paused };
+    for mut node in &mut mark {
+        if node.image != *wanted {
+            node.image = wanted.clone();
+        }
+    }
 }
 
-/// `1:23 / 4:56`, or `paused  1:23 / 4:56`, or `1:23` with no length known.
+/// `1:23 / 4:56`, or `1:23` alone with no length known.
 fn detail(s: &Status) -> String {
-    let state = if s.playing() { String::new() } else { format!("{}  ", s.playback) };
     match s.track.as_ref().and_then(|t| t.length) {
-        Some(length) => format!("{state}{} / {}", clock(s.position()), clock(length)),
-        None => format!("{state}{}", clock(s.position())),
+        Some(length) => format!("{} / {}", clock(s.position()), clock(length)),
+        None => clock(s.position()),
     }
+}
+
+/// The play mark (a triangle) or the pause mark (two bars), white on
+/// nothing, to be tinted: `MARK_PIXELS` square, with the edges softened
+/// over a pixel.
+fn mark(playing: bool) -> Image {
+    let n = MARK_PIXELS;
+    let mut pixels = Vec::with_capacity((n * n * 4) as usize);
+    // Coverage at a point in 0..1 square coordinates, y down.
+    let inside = |x: f32, y: f32| -> bool {
+        if playing {
+            // The triangle: left edge at 0.18, point at 0.92 on the middle line.
+            let (left, right) = (0.18, 0.92);
+            let half = 0.42 * (right - x) / (right - left);
+            x >= left && x <= right && (y - 0.5).abs() <= half
+        } else {
+            let bar = |x0: f32| x >= x0 && x <= x0 + 0.24;
+            (0.12..=0.88).contains(&y) && (bar(0.18) || bar(0.58))
+        }
+    };
+    for py in 0..n {
+        for px in 0..n {
+            // Four by four samples across the pixel.
+            let mut hits = 0;
+            for sy in 0..4 {
+                for sx in 0..4 {
+                    let x = (px as f32 + (sx as f32 + 0.5) / 4.0) / n as f32;
+                    let y = (py as f32 + (sy as f32 + 0.5) / 4.0) / n as f32;
+                    hits += inside(x, y) as u32;
+                }
+            }
+            let alpha = (hits * 255 / 16) as u8;
+            pixels.extend_from_slice(&[255, 255, 255, alpha]);
+        }
+    }
+    let mut image = Image::new(bevy::render::render_resource::Extent3d { width: n, height: n, depth_or_array_layers: 1 }, bevy::render::render_resource::TextureDimension::D2, pixels, bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb, RenderAssetUsages::RENDER_WORLD);
+    image.sampler = ImageSampler::linear();
+    image
 }
 
 /// Minutes and seconds, with hours once there are any.
