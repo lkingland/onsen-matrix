@@ -5,12 +5,17 @@
 //! The rule of a screensaver is that any input ends it, and that stays the
 //! rule. The exceptions are the keys the now-playing panel takes, and they
 //! depend on whether the panel is there: Space brings it in when it is
-//! not, and drives it when it is. The panel says which through `Focus`,
-//! and the whole key table is `action` below, so the modality is in one
-//! place and can be read as a table. Modifier keys on their own do nothing,
-//! so a chord can be pressed.
+//! not, and drives it when it is; Shift+Space sends it out. The panel says
+//! which through `Focus`, and the whole key table is `action` below, so
+//! the modality is in one place and can be read as a table. Modifier keys
+//! on their own do nothing, so a chord can be pressed.
+//!
+//! Keys are matched by what they mean (the logical key, after the
+//! keyboard layout), not by where they are: Space is Space on any layout,
+//! and a virtual keyboard, which has no physical layout to speak of, is
+//! read right too.
 
-use bevy::input::keyboard::KeyboardInput;
+use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input::mouse::{MouseButtonInput, MouseMotion, MouseWheel};
 use bevy::input::ButtonState;
 use bevy::prelude::*;
@@ -33,6 +38,8 @@ pub enum Action {
     End(String),
     /// Bring the now-playing panel in, or keep it in.
     ShowMedia,
+    /// Send the now-playing panel out now.
+    HideMedia,
 }
 
 /// Which part of the picture has the keys. The now-playing panel sets
@@ -42,27 +49,40 @@ pub struct Focus {
     pub media: bool,
 }
 
-/// The key table: what a press means, given who has the keys. `None` is a
-/// press that means nothing, such as a modifier on its own.
-fn action(key: KeyCode, media: bool) -> Option<Action> {
-    use KeyCode::*;
-    match (key, media) {
-        (Space, _) => Some(Action::ShowMedia),
-        (ShiftLeft | ShiftRight | ControlLeft | ControlRight | AltLeft | AltRight | SuperLeft | SuperRight, _) => None,
-        (other, _) => Some(Action::End(format!("key {other:?}"))),
+/// The key table: what a press means, given whether Shift is held and who
+/// has the keys. `None` is a press that means nothing: a modifier on its
+/// own, or a panel chord with no panel to act on.
+fn action(key: &Key, shift: bool, media: bool) -> Option<Action> {
+    match (key, shift, media) {
+        (Key::Space, false, _) => Some(Action::ShowMedia),
+        (Key::Space, true, true) => Some(Action::HideMedia),
+        (Key::Space, true, false) => None,
+        (Key::Shift | Key::Control | Key::Alt | Key::AltGraph | Key::Super | Key::Meta | Key::Hyper | Key::Fn, ..) => None,
+        (other, ..) => Some(Action::End(format!("key {other:?}"))),
     }
 }
 
-/// Each key press, as it is first pressed (not held), to its action.
-fn keys(mut presses: MessageReader<KeyboardInput>, focus: Res<Focus>, mut actions: MessageWriter<Action>) {
-    for press in presses.read() {
-        if press.state != ButtonState::Pressed || press.repeat {
-            continue;
-        }
-        if let Some(a) = action(press.key_code, focus.media) {
+/// The key events in their order, each press to its action. Whether Shift
+/// is down is kept from the same stream, so a chord reads right however
+/// the events fall across frames.
+fn keys(mut events: MessageReader<KeyboardInput>, focus: Res<Focus>, mut shift: Local<bool>, mut actions: MessageWriter<Action>) {
+    for event in events.read() {
+        if let Some(a) = read(&event.logical_key, event.state == ButtonState::Pressed, event.repeat, focus.media, &mut shift) {
+            debug!("key {:?} shift={} media={}: {a:?}", event.logical_key, *shift, focus.media);
             actions.write(a);
         }
     }
+}
+
+/// One key event: keeps `shift`, and gives the action of a first press.
+fn read(key: &Key, pressed: bool, repeat: bool, media: bool, shift: &mut bool) -> Option<Action> {
+    if *key == Key::Shift && !repeat {
+        *shift = pressed;
+    }
+    if !pressed || repeat {
+        return None;
+    }
+    action(key, *shift, media)
 }
 
 /// A click, the wheel, or the pointer moving more than a little: the end.
@@ -80,17 +100,42 @@ fn pointer(mut buttons: MessageReader<MouseButtonInput>, mut wheel: MessageReade
 mod tests {
     use super::*;
 
+    fn letter(c: &str) -> Key {
+        Key::Character(c.into())
+    }
+
     #[test]
     fn space_brings_the_panel_in_and_any_other_key_ends_the_run() {
-        assert_eq!(action(KeyCode::Space, false), Some(Action::ShowMedia));
-        assert_eq!(action(KeyCode::Space, true), Some(Action::ShowMedia));
-        assert!(matches!(action(KeyCode::KeyA, false), Some(Action::End(_))));
-        assert!(matches!(action(KeyCode::Escape, true), Some(Action::End(_))));
+        assert_eq!(action(&Key::Space, false, false), Some(Action::ShowMedia));
+        assert_eq!(action(&Key::Space, false, true), Some(Action::ShowMedia));
+        assert!(matches!(action(&letter("a"), false, false), Some(Action::End(_))));
+        assert!(matches!(action(&Key::Escape, false, true), Some(Action::End(_))));
+        assert!(matches!(action(&letter("A"), true, true), Some(Action::End(_))), "shifted letters end it too");
+    }
+
+    #[test]
+    fn shift_space_sends_the_panel_out_and_is_nothing_without_one() {
+        assert_eq!(action(&Key::Space, true, true), Some(Action::HideMedia));
+        assert_eq!(action(&Key::Space, true, false), None);
+    }
+
+    #[test]
+    fn a_chord_reads_right_from_the_stream_whatever_the_frames() {
+        // Shift down, Space down and up, Shift up: one hide, nothing else,
+        // whether the events come in one frame or several.
+        let mut shift = false;
+        let events = [(Key::Shift, true), (Key::Space, true), (Key::Space, false), (Key::Shift, false), (Key::Space, true)];
+        let actions: Vec<_> = events.iter().filter_map(|(k, down)| read(k, *down, false, true, &mut shift)).collect();
+        assert_eq!(actions, [Action::HideMedia, Action::ShowMedia]);
+        assert!(!shift);
+        // A held key repeating is not pressed again.
+        assert_eq!(read(&Key::Space, true, true, true, &mut shift), None);
     }
 
     #[test]
     fn a_modifier_alone_is_nothing() {
-        assert_eq!(action(KeyCode::ShiftLeft, false), None);
-        assert_eq!(action(KeyCode::ControlRight, true), None);
+        assert_eq!(action(&Key::Shift, false, false), None);
+        assert_eq!(action(&Key::Control, false, true), None);
+        assert_eq!(action(&Key::Shift, true, true), None);
     }
 }

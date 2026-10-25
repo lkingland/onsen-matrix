@@ -263,6 +263,7 @@ fn act(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut actions:
     for action in actions.read() {
         match action {
             Action::ShowMedia => shown.presence.show(time.elapsed_secs(), cfg.media.hold),
+            Action::HideMedia => shown.presence.hide(),
             Action::End(_) => {}
         }
     }
