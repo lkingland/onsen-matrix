@@ -80,8 +80,8 @@ one build dependency (`cargo`), `-i` installs the result with pacman. Inside:
 - **Logging** goes to the terminal when stderr is one, and otherwise, which
   is the menu's case, to `~/.local/state/onsen-matrix/log`, overwritten each
   run. The `rain:` lines and the reason the run ended are there.
-- **While it runs** it holds a Wayland idle inhibitor on its window, so the
-  stock screensaver and the lock do not fire over it. It ends on any key
+- **While it runs** it holds a Wayland idle inhibitor, so the stock
+  screensaver and the lock do not fire over it. It ends on any key
   but the panel's (Space, and the arrows and Shift+Space while the panel
   is in), on any click, scroll or pointer movement, on losing focus (which
   is what the lock does to every window), or at the half-hour limit, after

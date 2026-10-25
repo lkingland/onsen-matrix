@@ -1,23 +1,23 @@
 //! Idle inhibition: while the screensaver runs, the compositor's idle
 //! timers should not fire, or Omarchy's own screensaver and lock would
 //! take over the display after their timeouts. A video player says the
-//! same thing with the same tool: an idle inhibitor on its surface, from
-//! Wayland's idle-inhibit protocol. The time limit still ends the run, and
-//! then idle resumes.
+//! same thing with the same tool, Wayland's idle-inhibit protocol. The
+//! time limit still ends the run, and then idle resumes.
 //!
-//! winit does not expose this, so it is done on winit's own display and
-//! surface, handed over through their raw handles: a connection wrapped
-//! around the same libwayland display, and the inhibitor made on the
-//! window's surface. One inhibitor is enough.
+//! The inhibitor sits on a surface of our own that is never shown, on a
+//! connection of our own, not on a window. Hyprland counts an inhibitor on
+//! a window's surface only while the window is visible, and a window is
+//! not visible while it fades in; it re-evaluates only when a window maps,
+//! unmaps, changes focus or fullscreen. An inhibitor last evaluated during
+//! the fade therefore stays off for the whole run, which is what happened
+//! across three displays. A surface with no role belongs to no window, and
+//! Hyprland assumes an inhibitor on one is visible: it holds from creation
+//! until it is destroyed, whatever the windows, fades and focus do.
 
-use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
-use bevy::window::RawHandleWrapper;
-use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use wayland_client::backend::{Backend, ObjectId};
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
-use wayland_client::protocol::{wl_registry, wl_surface::WlSurface};
-use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
+use wayland_client::protocol::{wl_compositor::WlCompositor, wl_registry, wl_surface::WlSurface};
+use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle};
 use wayland_protocols::wp::idle_inhibit::zv1::client::{zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1, zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1};
 
 pub struct InhibitPlugin;
@@ -33,38 +33,32 @@ struct State;
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
 }
+wayland_client::delegate_noop!(State: ignore WlCompositor);
+wayland_client::delegate_noop!(State: ignore WlSurface);
 wayland_client::delegate_noop!(State: ignore ZwpIdleInhibitManagerV1);
 wayland_client::delegate_noop!(State: ignore ZwpIdleInhibitorV1);
 
-/// The inhibitor, and the connection and queue that keep it. Dropped, the
-/// inhibitor is destroyed and idle resumes.
+/// The inhibitor, with the surface and connection that keep it. Dropped,
+/// the inhibitor is destroyed and idle resumes.
 struct Inhibitor {
     queue: EventQueue<State>,
     state: State,
     _inhibitor: ZwpIdleInhibitorV1,
+    _surface: WlSurface,
     _conn: Connection,
 }
 
-/// Once a window has its handles, inhibits idle on its surface; after
-/// that, keeps the connection's queue drained. Main thread only, like
-/// everything that touches winit's display.
-fn inhibit(_: NonSendMarker, mut done: Local<bool>, mut holder: Local<Option<Inhibitor>>, windows: Query<&RawHandleWrapper, With<Window>>) {
+/// Inhibits idle once, on the first frame; after that keeps the
+/// connection's queue drained, so the registry's news never backs up.
+fn inhibit(mut done: Local<bool>, mut holder: Local<Option<Inhibitor>>) {
     if let Some(h) = holder.as_mut() {
         let _ = h.queue.dispatch_pending(&mut h.state);
         return;
     }
-    if *done {
+    if std::mem::replace(&mut *done, true) {
         return;
     }
-    let Some(handles) = windows.iter().next() else { return };
-    *done = true;
-    let (RawDisplayHandle::Wayland(display), RawWindowHandle::Wayland(window)) = (handles.get_display_handle(), handles.get_window_handle()) else {
-        info!("idle inhibit: not on Wayland; nothing to do");
-        return;
-    };
-    // Safety: the handles are winit's live display and surface, used on the
-    // main thread for the window's lifetime, which the holder never outlives.
-    match unsafe { create(display.display.as_ptr(), window.surface.as_ptr()) } {
+    match create() {
         Ok(i) => {
             *holder = Some(i);
             info!("idle inhibited while the screensaver runs");
@@ -73,15 +67,14 @@ fn inhibit(_: NonSendMarker, mut done: Local<bool>, mut holder: Local<Option<Inh
     }
 }
 
-unsafe fn create(display: *mut std::ffi::c_void, surface: *mut std::ffi::c_void) -> Result<Inhibitor, String> {
-    let backend = unsafe { Backend::from_foreign_display(display as *mut _) };
-    let conn = Connection::from_backend(backend);
+fn create() -> Result<Inhibitor, String> {
+    let conn = Connection::connect_to_env().map_err(|e| format!("no Wayland display: {e}"))?;
     let (globals, queue) = registry_queue_init::<State>(&conn).map_err(|e| format!("registry: {e}"))?;
     let qh = queue.handle();
+    let compositor: WlCompositor = globals.bind(&qh, 1..=6, ()).map_err(|e| format!("no compositor: {e}"))?;
     let manager: ZwpIdleInhibitManagerV1 = globals.bind(&qh, 1..=1, ()).map_err(|e| format!("no idle-inhibit protocol: {e}"))?;
-    let id = unsafe { ObjectId::from_ptr(WlSurface::interface(), surface as *mut _) }.map_err(|e| format!("surface: {e}"))?;
-    let wl_surface = WlSurface::from_id(&conn, id).map_err(|e| format!("surface: {e}"))?;
-    let inhibitor = manager.create_inhibitor(&wl_surface, &qh, ());
+    let surface = compositor.create_surface(&qh, ());
+    let inhibitor = manager.create_inhibitor(&surface, &qh, ());
     conn.flush().map_err(|e| format!("flush: {e}"))?;
-    Ok(Inhibitor { queue, state: State, _inhibitor: inhibitor, _conn: conn })
+    Ok(Inhibitor { queue, state: State, _inhibitor: inhibitor, _surface: surface, _conn: conn })
 }

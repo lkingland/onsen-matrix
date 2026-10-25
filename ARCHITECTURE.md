@@ -20,11 +20,19 @@ and `--outputs`, `--exclude`, `--fps` and `--limit` override the file. The
 repository's `config.toml` lists every setting at its default and is
 installed to `/usr/share/onsen-matrix/config.toml`.
 
-While it runs it holds a Wayland idle inhibitor on its surface, as a video
-player does, so the compositor's idle timers do not fire and Omarchy's own
-screensaver and lock do not take over the display mid-run; the time limit
-ends the run, and idle resumes. `hyprctl clients` shows the window as
-`inhibitingIdle`.
+While it runs it holds a Wayland idle inhibitor, as a video player does,
+so the compositor's idle timers do not fire and Omarchy's own screensaver
+and lock do not take over the display mid-run; the time limit ends the run,
+and idle resumes. The inhibitor sits on a roleless surface of its own
+connection, not on a window: Hyprland counts an inhibitor on a window only
+while the window is visible, a window fading in is not yet visible, and it
+re-evaluates only on map, unmap, focus and fullscreen changes, so an
+inhibitor on a window evaluated during the fade stayed off for a whole run
+(seen across three displays). An inhibitor on a surface with no window is
+assumed visible and holds from creation to destruction. Because it is not
+on the window, `hyprctl clients` does not show `inhibitingIdle`; the check
+is an `ext_idle_notification_v1` that obeys inhibitors never reporting idle
+while one that ignores them does.
 
 The run ends on any key, click, wheel or pointer movement, except the few
 keys the now-playing panel takes (below); on losing focus, which is what
@@ -55,8 +63,8 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 - `src/config.rs`: the settings, read from `config.toml` into a resource.
 - `src/host.rs`: the canvas and the displays, ending the run, snapshots,
   frame-time logging.
-- `src/inhibit.rs`: the idle inhibitor, made on winit's own surface through
-  its raw handles.
+- `src/inhibit.rs`: the idle inhibitor, on a roleless surface of its own
+  Wayland connection.
 - `src/input.rs`: what a key or the pointer asks of the run, as one
   `Action` per press: the end, or one of the now-playing panel's. The key
   table is one function; the panel says whether it has the keys.
