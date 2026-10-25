@@ -26,3 +26,8 @@ spawn = 0.125       # seconds between the glyphs a droplet stamps
 size = 0.03125      # a glyph's height, in units: one unit spans the screen's height one unit ahead
 life = 10.0         # seconds from stamped to gone
 tick = 0.75         # seconds between characters as a glyph fades
+
+[media]
+show = true         # what is playing, at the bottom centre: thumbnail, title, artist, position
+size = 0.043        # the thumbnail's height, as a fraction of the screen's; the text scales with it
+margin = 0.05       # the gap below it, as a fraction of the screen's height

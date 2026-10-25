@@ -56,6 +56,17 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
   frame-time logging.
 - `src/inhibit.rs`: the idle inhibitor, made on winit's own surface through
   its raw handles.
+- `src/media.rs`: what is playing, at the bottom centre of the picture:
+  the thumbnail, title, artist and position. Bevy UI targeted at the
+  scene's camera, so it is laid out over the whole canvas and drawn into
+  it after bloom and tone mapping, sized by the canvas's height, set in
+  the atlas's font. `[media]` in the config turns it off and sizes it.
+- `crates/nowplaying`: the library behind it, with no Bevy in it. It
+  watches the session bus for media players the way the Omarchy bar does
+  (every player speaks MPRIS, `org.mpris.MediaPlayer2.*` on D-Bus: Brave for
+  the page that is playing, Spotify, mpv), by signal rather than polling,
+  with the bar's rule for which player to show and the position carried
+  forward from the last report. Its README has the details.
 - `bin/dev`: the loop. `bin/dev` builds and holds the picture on one display
   (`ONSEN_MATRIX_MONITOR`, default HDMI-A-1); `bin/dev snap` writes the
   canvas to `target/snap.png`; `bin/dev stop`. `bin/burn-in` samples a long
@@ -96,6 +107,21 @@ The glow and core sit under an aperture grille of red, green and blue
 stripes and slowly rolling scanlines, the light breathing a little. Glyphs
 are light and blend purely additively, so nothing a glyph draws can hide
 what is behind it; the camera adds Bevy's bloom.
+
+## What is playing
+
+The media players on the session bus announce their track over MPRIS, and
+the Omarchy bar shows the one that is playing. The screensaver shows the
+same at the bottom centre: the thumbnail (a browser writes it to a file
+under `/tmp` and names the file), the title, the artist, and the position,
+which runs on from the last value the player reported without asking
+again. It follows the bar's rule when several players are up: the one
+playing, the one that started first among those, else one with a track
+loaded. Nothing is polled; the panel redraws when the watcher's change
+counter moves, once a frame checked. `[media]` in the config: `show`,
+`size` (the thumbnail's height as a fraction of the screen's; the text
+scales with it) and `margin` (the gap below). With no session bus, or the
+panel off, nothing is drawn and nothing is watched.
 
 ## The characters
 

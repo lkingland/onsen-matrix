@@ -10,13 +10,16 @@
 //! characters come from a signed-distance atlas (`atlas.rs`). The host
 //! (`host.rs`) renders the scene once into a canvas as wide as every
 //! display and shows each display its slice. The settings come from
-//! `config.toml` (`config.rs`), overridden by the command line.
+//! `config.toml` (`config.rs`), overridden by the command line. What is
+//! playing, read from the media players on the session bus, is shown at
+//! the bottom of the picture (`media.rs`, on the `nowplaying` crate).
 
 mod atlas;
 mod config;
 mod host;
 mod inhibit;
 mod look;
+mod media;
 mod scene;
 
 use bevy::prelude::*;
@@ -99,6 +102,6 @@ fn main() {
                 // fullscreen on its own, once the monitors are known.
                 .set(WindowPlugin { primary_window: None, exit_condition: ExitCondition::OnAllClosed, ..default() }),
         )
-        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin, inhibit::InhibitPlugin))
+        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin, inhibit::InhibitPlugin, media::MediaPlugin))
         .run();
 }

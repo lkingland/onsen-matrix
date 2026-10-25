@@ -20,7 +20,8 @@ pub const CELL: u32 = 128;
 /// Pixels of the cell that the distance range covers on either side of the edge.
 pub const SPREAD: f32 = 20.0;
 
-const FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
+/// The font, for the atlas and for the now-playing panel's text.
+pub const FONT: &str = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc";
 const TEXT: &str = include_str!("../assets/lotus-gongyo.txt");
 
 /// The characters, in order of first appearance.

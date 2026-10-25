@@ -36,7 +36,7 @@ build() {
 
 check() {
   cd "$(_root)"
-  CARGO_TARGET_DIR="$PWD/target" cargo test --release --locked
+  CARGO_TARGET_DIR="$PWD/target" cargo test --release --locked --workspace
 }
 
 package() {

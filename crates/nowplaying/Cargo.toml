@@ -1,0 +1,18 @@
+[package]
+name = "nowplaying"
+version = "0.2.0"
+edition = "2024"
+description = "What is playing: track, artist, thumbnail and controls from any MPRIS media player, read over D-Bus the way the Omarchy bar reads it"
+license = "MIT"
+
+[dependencies]
+# D-Bus. The blocking API serves the controls; the worker thread drives the
+# async API on its own executor, so no runtime is imposed on the caller.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
+async-executor = "1"
+futures-lite = "2"
+log = "0.4"
+
+[[bin]]
+name = "nowplaying-dump"
+path = "src/bin/dump.rs"

@@ -15,6 +15,7 @@ One scene, spanning every display at once. Built with no ceiling: Rust on the Be
 - **Phosphor, not pixels.** Every character glows like a tube: a soft aura, scattered light and a sharp core, under an aperture grille and rolling scanlines.
 - **One picture across every display.** All your screens become one canvas with no seam. Choose them by make and model, not by which port they're in.
 - **Gone the instant you touch anything.** Any key, click, scroll or pointer movement ends it, and so does the session lock. It also stops itself after half an hour.
+- **What's playing, in the picture.** The track your browser or player is on, with its thumbnail, title, artist and position, at the bottom centre, read the way the Omarchy bar reads it. One line in the config turns it off.
 - **Light on the machine.** It polls nothing, and the whole rain is a single draw.
 - **Tuned in one file.** Density, speed, depth, frame rate and run length all live in one commented config.
 

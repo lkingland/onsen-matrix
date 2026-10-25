@@ -14,6 +14,7 @@ pub struct Config {
     pub rain: Rain,
     pub droplet: Droplet,
     pub glyph: Glyph,
+    pub media: Media,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -56,6 +57,14 @@ pub struct Glyph {
     pub tick: f32,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct Media {
+    pub show: bool,
+    pub size: f32,
+    pub margin: f32,
+}
+
 impl Default for Run {
     fn default() -> Self {
         Run { fps: 60, limit: 30.0, outputs: vec![], exclude: vec![] }
@@ -79,6 +88,11 @@ impl Default for Droplet {
 impl Default for Glyph {
     fn default() -> Self {
         Glyph { size: 0.03125, life: 10.0, tick: 0.75 }
+    }
+}
+impl Default for Media {
+    fn default() -> Self {
+        Media { show: true, size: 0.043, margin: 0.05 }
     }
 }
 
@@ -118,6 +132,7 @@ mod tests {
         assert_eq!((shipped.rain.droplets, shipped.rain.rate, shipped.rain.near, shipped.rain.far), (d.rain.droplets, d.rain.rate, d.rain.near, d.rain.far));
         assert_eq!((shipped.droplet.fall, shipped.droplet.spawn), (d.droplet.fall, d.droplet.spawn));
         assert_eq!((shipped.glyph.size, shipped.glyph.life, shipped.glyph.tick), (d.glyph.size, d.glyph.life, d.glyph.tick));
+        assert_eq!((shipped.media.show, shipped.media.size, shipped.media.margin), (d.media.show, d.media.size, d.media.margin));
     }
 
     #[test]

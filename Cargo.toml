@@ -3,13 +3,20 @@ name = "onsen-matrix"
 version = "1.0.0"
 edition = "2024"
 
+[workspace]
+members = ["crates/nowplaying"]
+
 [dependencies]
 bevy = { version = "0.20", default-features = false, features = [
   "bevy_window", "bevy_winit", "wayland", "bevy_render", "bevy_core_pipeline",
   "bevy_pbr", "bevy_asset", "file_watcher", "multi_threaded", "bevy_log",
   "bevy_post_process", "tonemapping_luts", "ktx2", "zstd_rust", "std", "async_executor", "png",
   "bevy_sprite", "bevy_sprite_render",
+  # The now-playing panel: UI nodes and text, drawn into the canvas.
+  "bevy_ui", "bevy_ui_render", "bevy_text", "default_font",
 ] }
+# What is playing, from the media players on the session bus (crates/nowplaying).
+nowplaying = { path = "crates/nowplaying" }
 bytemuck = { version = "1.25", features = ["derive"] }
 fontdue = "0.9.4"
 libc = "0.2"
