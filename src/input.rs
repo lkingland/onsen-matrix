@@ -5,7 +5,7 @@
 //! The rule of a screensaver is that any input ends it, and that stays the
 //! rule. The exceptions are the keys the now-playing panel takes, and they
 //! depend on whether the panel is there: Space brings it in when it is
-//! not, and drives it when it is; Shift+Space sends it out. The panel says
+//! not, and plays or pauses when it is; Shift+Space sends it out. The panel says
 //! which through `Focus`, and the whole key table is `action` below, so
 //! the modality is in one place and can be read as a table. Modifier keys
 //! on their own do nothing, so a chord can be pressed.
@@ -40,6 +40,8 @@ pub enum Action {
     ShowMedia,
     /// Send the now-playing panel out now.
     HideMedia,
+    /// Pause the player, or play it if paused.
+    PlayPause,
 }
 
 /// Which part of the picture has the keys. The now-playing panel sets
@@ -54,7 +56,8 @@ pub struct Focus {
 /// own, or a panel chord with no panel to act on.
 fn action(key: &Key, shift: bool, media: bool) -> Option<Action> {
     match (key, shift, media) {
-        (Key::Space, false, _) => Some(Action::ShowMedia),
+        (Key::Space, false, false) => Some(Action::ShowMedia),
+        (Key::Space, false, true) => Some(Action::PlayPause),
         (Key::Space, true, true) => Some(Action::HideMedia),
         (Key::Space, true, false) => None,
         (Key::Shift | Key::Control | Key::Alt | Key::AltGraph | Key::Super | Key::Meta | Key::Hyper | Key::Fn, ..) => None,
@@ -105,9 +108,9 @@ mod tests {
     }
 
     #[test]
-    fn space_brings_the_panel_in_and_any_other_key_ends_the_run() {
+    fn space_brings_the_panel_in_then_plays_or_pauses_and_any_other_key_ends_the_run() {
         assert_eq!(action(&Key::Space, false, false), Some(Action::ShowMedia));
-        assert_eq!(action(&Key::Space, false, true), Some(Action::ShowMedia));
+        assert_eq!(action(&Key::Space, false, true), Some(Action::PlayPause));
         assert!(matches!(action(&letter("a"), false, false), Some(Action::End(_))));
         assert!(matches!(action(&Key::Escape, false, true), Some(Action::End(_))));
         assert!(matches!(action(&letter("A"), true, true), Some(Action::End(_))), "shifted letters end it too");
@@ -126,7 +129,7 @@ mod tests {
         let mut shift = false;
         let events = [(Key::Shift, true), (Key::Space, true), (Key::Space, false), (Key::Shift, false), (Key::Space, true)];
         let actions: Vec<_> = events.iter().filter_map(|(k, down)| read(k, *down, false, true, &mut shift)).collect();
-        assert_eq!(actions, [Action::HideMedia, Action::ShowMedia]);
+        assert_eq!(actions, [Action::HideMedia, Action::PlayPause]);
         assert!(!shift);
         // A held key repeating is not pressed again.
         assert_eq!(read(&Key::Space, true, true, true, &mut shift), None);

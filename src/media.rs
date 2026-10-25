@@ -258,14 +258,23 @@ fn load_art(mut shown: ResMut<Shown>, mut images: ResMut<Assets<Image>>, mut art
     }
 }
 
-/// The keys' asks, while the panel is wanted at all.
-fn act(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut actions: MessageReader<Action>) {
+/// The keys' asks. A control keeps the panel in for another hold, so what
+/// it did can be seen.
+fn act(player: Res<Player>, cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut actions: MessageReader<Action>) {
     for action in actions.read() {
-        match action {
-            Action::ShowMedia => shown.presence.show(time.elapsed_secs(), cfg.media.hold),
-            Action::HideMedia => shown.presence.hide(),
-            Action::End(_) => {}
+        let control = match action {
+            Action::ShowMedia => Ok(()),
+            Action::HideMedia => {
+                shown.presence.hide();
+                continue;
+            }
+            Action::PlayPause => player.0.play_pause(),
+            Action::End(_) => continue,
+        };
+        if let Err(e) = control {
+            warn!("media: {action:?}: {e}");
         }
+        shown.presence.show(time.elapsed_secs(), cfg.media.hold);
     }
 }
 
