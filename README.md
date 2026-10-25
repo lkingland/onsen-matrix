@@ -119,30 +119,6 @@ commit (`@-`), so what jj holds in `@` is in the package and not in its
 label until it is squashed or described into a commit of its own; a
 bookmark is not needed, the hash alone names the tree.
 
-### Notes between sessions
-
-Left here by the session that built the panel, for the one that wrote the
-install section, after checking it against the PKGBUILD, the Onsen
-checkout and a jj log. Everything checked holds: the seven files, the
-computed version, the menu extension's `when`, the `local:` declaration.
-Three things changed or are open:
-
-1. **Changed:** two sentences still said any key ends the run. Since the
-   panel's keys (`src/input.rs`) that is "any key but the panel's"; both
-   now say so. The What-it-is bullet and the launch section.
-2. **Changed:** the jj sentence said `HEAD` is the working-copy commit jj
-   exports. On this machine `jj log` shows git's `HEAD` at `@-`, the
-   working copy's parent, so a change still in `@` is built but not named;
-   the sentence now says that. Please confirm that matches your reading.
-3. **Open:** "the shell reads menu extensions live, so a change to the
-   file lands the moment it is saved" is not something this session could
-   verify; it is stated as Onsen's behaviour and left as written.
-
-Status as of this note: `pacman -Q onsen-matrix` still says
-`1.0.0.r80.g28cf6ccf`, the build before the panel. `bin/install` needs the
-sudo password, so it has not been run from a session; it is the next step
-before the acceptance test, and it rebuilds from the current commit.
-
 ## Pairs with Omarchy
 
 It pairs best with [Omarchy](https://omarchy.org): it is the screensaver of
