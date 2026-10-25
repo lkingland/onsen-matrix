@@ -5,7 +5,8 @@
 //! The rule of a screensaver is that any input ends it, and that stays the
 //! rule. The exceptions are the keys the now-playing panel takes, and they
 //! depend on whether the panel is there: Space brings it in when it is
-//! not, and plays or pauses when it is; Shift+Space sends it out. The panel says
+//! not, and plays or pauses when it is; Right skips to the next track when
+//! it is; Shift+Space sends it out. The panel says
 //! which through `Focus`, and the whole key table is `action` below, so
 //! the modality is in one place and can be read as a table. Modifier keys
 //! on their own do nothing, so a chord can be pressed.
@@ -42,6 +43,8 @@ pub enum Action {
     HideMedia,
     /// Pause the player, or play it if paused.
     PlayPause,
+    /// Skip to the next track.
+    Next,
 }
 
 /// Which part of the picture has the keys. The now-playing panel sets
@@ -60,6 +63,7 @@ fn action(key: &Key, shift: bool, media: bool) -> Option<Action> {
         (Key::Space, false, true) => Some(Action::PlayPause),
         (Key::Space, true, true) => Some(Action::HideMedia),
         (Key::Space, true, false) => None,
+        (Key::ArrowRight, false, true) => Some(Action::Next),
         (Key::Shift | Key::Control | Key::Alt | Key::AltGraph | Key::Super | Key::Meta | Key::Hyper | Key::Fn, ..) => None,
         (other, ..) => Some(Action::End(format!("key {other:?}"))),
     }
@@ -114,6 +118,13 @@ mod tests {
         assert!(matches!(action(&letter("a"), false, false), Some(Action::End(_))));
         assert!(matches!(action(&Key::Escape, false, true), Some(Action::End(_))));
         assert!(matches!(action(&letter("A"), true, true), Some(Action::End(_))), "shifted letters end it too");
+    }
+
+    #[test]
+    fn right_skips_with_the_panel_in_and_ends_the_run_without_it() {
+        assert_eq!(action(&Key::ArrowRight, false, true), Some(Action::Next));
+        assert!(matches!(action(&Key::ArrowRight, false, false), Some(Action::End(_))));
+        assert!(matches!(action(&Key::ArrowRight, true, true), Some(Action::End(_))), "with Shift it is some other key");
     }
 
     #[test]

@@ -269,6 +269,7 @@ fn act(player: Res<Player>, cfg: Res<Config>, time: Res<Time>, mut shown: ResMut
                 continue;
             }
             Action::PlayPause => player.0.play_pause(),
+            Action::Next => player.0.next(),
             Action::End(_) => continue,
         };
         if let Err(e) = control {
