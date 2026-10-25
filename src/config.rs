@@ -22,6 +22,7 @@ pub struct Config {
 pub struct Run {
     pub fps: u32,
     pub limit: f32,
+    pub then: String,
     pub outputs: Vec<String>,
     pub exclude: Vec<String>,
 }
@@ -69,7 +70,7 @@ pub struct Media {
 
 impl Default for Run {
     fn default() -> Self {
-        Run { fps: 60, limit: 30.0, outputs: vec![], exclude: vec![] }
+        Run { fps: 60, limit: 30.0, then: "omarchy-system-lock".into(), outputs: vec![], exclude: vec![] }
     }
 }
 impl Default for Camera {
@@ -129,7 +130,7 @@ mod tests {
     fn the_shipped_config_is_the_defaults() {
         let shipped: Config = toml::from_str(include_str!("../config.toml")).expect("config.toml parses");
         let d = Config::default();
-        assert_eq!((shipped.run.fps, shipped.run.limit, shipped.run.outputs.len()), (d.run.fps, d.run.limit, 0));
+        assert_eq!((shipped.run.fps, shipped.run.limit, shipped.run.then.as_str(), shipped.run.outputs.len()), (d.run.fps, d.run.limit, d.run.then.as_str(), 0));
         assert_eq!((shipped.camera.walk, shipped.camera.rise), (d.camera.walk, d.camera.rise));
         assert_eq!((shipped.rain.droplets, shipped.rain.rate, shipped.rain.near, shipped.rain.far), (d.rain.droplets, d.rain.rate, d.rain.near, d.rain.far));
         assert_eq!((shipped.droplet.fall, shipped.droplet.spawn), (d.droplet.fall, d.droplet.spawn));

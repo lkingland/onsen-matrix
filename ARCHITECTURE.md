@@ -22,8 +22,11 @@ installed to `/usr/share/onsen-matrix/config.toml`.
 
 While it runs it holds a Wayland idle inhibitor, as a video player does,
 so the compositor's idle timers do not fire and Omarchy's own screensaver
-and lock do not take over the display mid-run; the time limit ends the run,
-and idle resumes. The inhibitor sits on a roleless surface of its own
+and lock do not take over the display mid-run; the time limit ends the run
+by handing the screen to `run.then`, the session lock by default, which
+blanks the displays. Idle timers restart from zero when the inhibitor goes,
+so without the hand-over the displays would stay lit until Omarchy's own
+lock time. The inhibitor sits on a roleless surface of its own
 connection, not on a window: Hyprland counts an inhibitor on a window only
 while the window is visible, a window fading in is not yet visible, and it
 re-evaluates only on map, unmap, focus and fullscreen changes, so an
