@@ -31,7 +31,7 @@ fn main() {
                     .map(|p| p.display().to_string())
                     .unwrap_or(track.art_url);
                 println!(
-                    "{} [{}] {} | {} - {} | art={art} | next={} prev={} play={} pause={}",
+                    "{} [{}] {} | {} - {} | art={art} | next={} prev={} play={} pause={} seek={}",
                     if i == 0 { "*" } else { " " },
                     s.identity,
                     s.playback,
@@ -41,6 +41,7 @@ fn main() {
                     s.can_go_previous,
                     s.can_play,
                     s.can_pause,
+                    s.can_seek,
                 );
             }
         }

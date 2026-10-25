@@ -56,7 +56,9 @@ if let Some(status) = watcher.status() {
     }
     println!("{:?} at {:?}", status.playback, status.position());
 }
-watcher.play_pause();
+watcher.play_pause()?;
+watcher.next()?;
+if status.can_seek { watcher.restart()?; } // back to the start of the track
 ```
 
 ## Try it

@@ -12,6 +12,7 @@ zbus = { version = "5", default-features = false, features = ["async-io", "block
 async-executor = "1"
 futures-lite = "2"
 log = "0.4"
+serde = "1"
 
 [[bin]]
 name = "nowplaying-dump"

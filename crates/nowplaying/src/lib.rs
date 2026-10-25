@@ -57,6 +57,8 @@ pub enum Error {
     Thread(std::io::Error),
     /// A control was asked for with no player to send it to.
     NoPlayer,
+    /// The player cannot do what was asked, by its own account.
+    Unsupported(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -65,6 +67,7 @@ impl fmt::Display for Error {
             Error::Bus(e) => write!(f, "session bus: {e}"),
             Error::Thread(e) => write!(f, "worker thread: {e}"),
             Error::NoPlayer => write!(f, "no media player on the bus"),
+            Error::Unsupported(what) => write!(f, "the player cannot {what}"),
         }
     }
 }
@@ -74,7 +77,7 @@ impl std::error::Error for Error {
         match self {
             Error::Bus(e) => Some(e),
             Error::Thread(e) => Some(e),
-            Error::NoPlayer => None,
+            Error::NoPlayer | Error::Unsupported(_) => None,
         }
     }
 }
@@ -151,14 +154,28 @@ impl Watcher {
         self.control("Next")
     }
 
-    /// Skips the shown player to the previous track, or restarts this one.
+    /// Skips the shown player to the previous track; some players restart
+    /// the current one instead when it is well under way.
     pub fn previous(&self) -> Result<(), Error> {
         self.control("Previous")
     }
 
+    /// Takes the shown player back to the start of its track, when it can
+    /// seek ([`Status::can_seek`]).
+    pub fn restart(&self) -> Result<(), Error> {
+        let status = self.status().ok_or(Error::NoPlayer)?;
+        if !status.can_seek {
+            return Err(Error::Unsupported("seek"));
+        }
+        // MPRIS seeks are relative; one past the start lands on it.
+        let back = -i64::try_from(status.position().as_micros()).unwrap_or(i64::MAX);
+        bus::call(&self.conn, &status.bus_name, "Seek", &(back,))?;
+        Ok(())
+    }
+
     fn control(&self, method: &str) -> Result<(), Error> {
         let status = self.status().ok_or(Error::NoPlayer)?;
-        bus::control(&self.conn, &status.bus_name, method)?;
+        bus::call(&self.conn, &status.bus_name, method, &())?;
         Ok(())
     }
 }

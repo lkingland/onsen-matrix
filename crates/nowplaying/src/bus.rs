@@ -441,6 +441,7 @@ fn apply(status: &mut Status, key: &str, value: &Value<'_>) {
         "CanGoPrevious" => status.can_go_previous = as_bool(value),
         "CanPlay" => status.can_play = as_bool(value),
         "CanPause" => status.can_pause = as_bool(value),
+        "CanSeek" => status.can_seek = as_bool(value),
         _ => {}
     }
 }
@@ -510,12 +511,16 @@ fn micros_to_duration(micros: i64) -> Duration {
 
 // ------------------------------------------------------------------ controls
 
-/// Calls a transport method on a player without waiting for the reply.
-pub(crate) fn control(
+/// Calls a player method without waiting for the reply.
+pub(crate) fn call<B>(
     conn: &zbus::blocking::Connection,
     bus_name: &str,
     method: &str,
-) -> zbus::Result<()> {
+    body: &B,
+) -> zbus::Result<()>
+where
+    B: serde::Serialize + zbus::zvariant::DynamicType,
+{
     let dest = BusName::try_from(bus_name.to_owned())?;
     let proxy = zbus::blocking::proxy::Builder::<zbus::blocking::Proxy<'_>>::new(conn)
         .destination(dest)?
@@ -523,7 +528,7 @@ pub(crate) fn control(
         .interface(PLAYER_IFACE)?
         .cache_properties(CacheProperties::No)
         .build()?;
-    proxy.call_noreply(method, &())
+    proxy.call_noreply(method, body)
 }
 
 #[cfg(test)]
@@ -598,9 +603,10 @@ mod tests {
         let mut status = Status::new("x".into());
         apply(&mut status, "PlaybackStatus", &Value::from("Playing"));
         apply(&mut status, "CanGoNext", &Value::Bool(true));
+        apply(&mut status, "CanSeek", &Value::Bool(true));
         apply(&mut status, "Rate", &Value::F64(1.5));
         assert!(status.playing());
-        assert!(status.can_go_next && !status.can_go_previous);
+        assert!(status.can_go_next && !status.can_go_previous && status.can_seek);
         assert_eq!(status.rate(), 1.5);
         apply(&mut status, "PlaybackStatus", &Value::from("Paused"));
         assert_eq!(status.playback, Playback::Paused);

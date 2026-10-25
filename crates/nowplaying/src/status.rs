@@ -89,6 +89,9 @@ pub struct Status {
     pub can_play: bool,
     /// Whether the player can be paused.
     pub can_pause: bool,
+    /// Whether the player can be moved within the track, as
+    /// [`Watcher::restart`](crate::Watcher::restart) does.
+    pub can_seek: bool,
     /// Where the player said it was, and when; the position is carried
     /// forward from here while playing.
     position: Duration,
@@ -108,6 +111,7 @@ impl Status {
             can_go_previous: false,
             can_play: false,
             can_pause: false,
+            can_seek: false,
             position: Duration::ZERO,
             position_at: Instant::now(),
             rate: 1.0,

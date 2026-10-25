@@ -47,6 +47,9 @@ const DETAIL_COLOUR: Color = Color::srgb(0.35, 0.55, 0.42);
 /// Frames to keep trying a thumbnail the player has named but not finished
 /// writing: a browser announces the track before the file is complete.
 const ART_RETRIES: u32 = 120;
+/// Left this far into a track goes back to its start; before that, to the
+/// previous track. What a CD player does.
+const RESTART_AFTER: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub struct MediaPlugin;
 
@@ -270,6 +273,10 @@ fn act(player: Res<Player>, cfg: Res<Config>, time: Res<Time>, mut shown: ResMut
             }
             Action::PlayPause => player.0.play_pause(),
             Action::Next => player.0.next(),
+            Action::Previous => match player.0.status() {
+                Some(s) if s.can_seek && s.position() > RESTART_AFTER => player.0.restart(),
+                _ => player.0.previous(),
+            },
             Action::End(_) => continue,
         };
         if let Err(e) = control {

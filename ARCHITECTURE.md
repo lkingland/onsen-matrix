@@ -26,10 +26,11 @@ screensaver and lock do not take over the display mid-run; the time limit
 ends the run, and idle resumes. `hyprctl clients` shows the window as
 `inhibitingIdle`.
 
-The run ends on any key, click, wheel or pointer movement; on losing
-focus, which is what the session lock does to every window; and at a time
-limit (30 minutes; `--limit MINUTES`, 0 for none). None of that polls
-anything. `--hold` disables all of it, for iterating. The frame rate is
+The run ends on any key, click, wheel or pointer movement, except the few
+keys the now-playing panel takes (below); on losing focus, which is what
+the session lock does to every window; and at a time limit (30 minutes;
+`--limit MINUTES`, 0 for none). None of that polls anything. `--hold`
+disables the ending, for iterating; the panel's keys still work. The frame rate is
 held at 60 (`--fps N`, 0 for the display's rate). A launch without a
 terminal logs to `~/.local/state/onsen-matrix/log`.
 
@@ -56,11 +57,15 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
   frame-time logging.
 - `src/inhibit.rs`: the idle inhibitor, made on winit's own surface through
   its raw handles.
+- `src/input.rs`: what a key or the pointer asks of the run, as one
+  `Action` per press: the end, or one of the now-playing panel's. The key
+  table is one function; the panel says whether it has the keys.
 - `src/media.rs`: what is playing, at the bottom centre of the picture:
-  the thumbnail, title, artist and position. Bevy UI targeted at the
-  scene's camera, so it is laid out over the whole canvas and drawn into
-  it after bloom and tone mapping, sized by the canvas's height, set in
-  the atlas's font. `[media]` in the config turns it off and sizes it.
+  the thumbnail, title, artist and position, in for a while after a track
+  change or a key, with a fade. Bevy UI targeted at the scene's camera, so
+  it is laid out over the whole canvas and drawn into it after bloom and
+  tone mapping, sized by the canvas's height, set in the atlas's font.
+  `[media]` in the config turns it off, sizes it and times it.
 - `crates/nowplaying`: the library behind it, with no Bevy in it. It
   watches the session bus for media players the way the Omarchy bar does
   (every player speaks MPRIS, `org.mpris.MediaPlayer2.*` on D-Bus: Brave for
@@ -118,10 +123,33 @@ which runs on from the last value the player reported without asking
 again. It follows the bar's rule when several players are up: the one
 playing, the one that started first among those, else one with a track
 loaded. Nothing is polled; the panel redraws when the watcher's change
-counter moves, once a frame checked. `[media]` in the config: `show`,
-`size` (the thumbnail's height as a fraction of the screen's; the text
-scales with it) and `margin` (the gap below). With no session bus, or the
-panel off, nothing is drawn and nothing is watched.
+counter moves, once a frame checked. With no session bus, or the panel
+off, nothing is drawn and nothing is watched.
+
+The panel is not always there. It fades in when the track changes (or
+first appears), stays `hold` seconds, and fades out; a fade takes `fade`
+seconds. `[media]` in the config: `show`, `size` (the thumbnail's height
+as a fraction of the screen's; the text scales with it), `margin` (the gap
+below), `hold` and `fade`.
+
+**The keys.** A screensaver ends on any key, and this one does, except
+for the panel's keys, which depend on whether the panel is in:
+
+| key         | panel out        | panel in                         |
+|-------------|------------------|----------------------------------|
+| Space       | brings it in     | play / pause                     |
+| Shift+Space | nothing          | sends it out now                 |
+| Right       | ends the run     | next track                       |
+| Left        | ends the run     | start of the track, or previous  |
+| anything else | ends the run   | ends the run                     |
+
+A control keeps the panel in for another `hold`. Left goes back to the
+start when more than three seconds in, else to the previous track, as a
+CD player does. Modifier keys on their own do nothing, so a chord can be
+pressed. Keys are read by what they mean (the logical key, after the
+layout), and Shift from the key stream in order, so a chord reads the
+same on any keyboard, virtual ones included. The table is `action` in
+`src/input.rs`, and nothing else decides what a key does.
 
 ## The characters
 
