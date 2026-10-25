@@ -12,12 +12,15 @@
 //! display and shows each display its slice. The settings come from
 //! `config.toml` (`config.rs`), overridden by the command line. What is
 //! playing, read from the media players on the session bus, is shown at
-//! the bottom of the picture (`media.rs`, on the `nowplaying` crate).
+//! the bottom of the picture (`media.rs`, on the `nowplaying` crate). The
+//! keys and the pointer end the run, except the keys the panel takes
+//! (`input.rs`).
 
 mod atlas;
 mod config;
 mod host;
 mod inhibit;
+mod input;
 mod look;
 mod media;
 mod scene;
@@ -102,6 +105,6 @@ fn main() {
                 // fullscreen on its own, once the monitors are known.
                 .set(WindowPlugin { primary_window: None, exit_condition: ExitCondition::OnAllClosed, ..default() }),
         )
-        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin, inhibit::InhibitPlugin, media::MediaPlugin))
+        .add_plugins((look::LookPlugin, scene::ScenePlugin, host::HostPlugin, inhibit::InhibitPlugin, input::InputPlugin, media::MediaPlugin))
         .run();
 }

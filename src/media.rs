@@ -12,12 +12,13 @@
 //! atlas's own font, so a title in any script the sutra's font covers is
 //! shown.
 //!
-//! The panel is not always there. It fades in when the track changes,
-//! stays `[media] hold` seconds, and fades out again, each fade taking
-//! `[media] fade` seconds; that is `Presence`, a small state machine with
-//! no Bevy in it. Nothing here reaches the bus. The watcher's change
-//! counter says when to redraw the text; the position is carried forward
-//! by the watcher and only read once a frame.
+//! The panel is not always there. It fades in when the track changes, or
+//! when asked for with a key (`input.rs`), stays `[media] hold` seconds,
+//! and fades out again, each fade taking `[media] fade` seconds; that is
+//! `Presence`, a small state machine with no Bevy in it. While it is in,
+//! it tells the input it has the keys. Nothing here reaches the bus. The
+//! watcher's change counter says when to redraw the text; the position is
+//! carried forward by the watcher and only read once a frame.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
@@ -28,6 +29,7 @@ use nowplaying::{Status, Watcher};
 
 use crate::atlas;
 use crate::config::Config;
+use crate::input::{Action, Focus};
 use crate::scene::Walker;
 
 // ------------------------------------------------------------------- look
@@ -54,7 +56,7 @@ impl Plugin for MediaPlugin {
             Update,
             (
                 open_panel.run_if(resource_exists::<Player>).run_if(not(resource_exists::<Shown>)),
-                (follow, load_art, tick_position, fade).chain().run_if(resource_exists::<Shown>),
+                (follow, act, load_art, tick_position, fade).chain().run_if(resource_exists::<Shown>),
             ),
         );
     }
@@ -256,10 +258,24 @@ fn load_art(mut shown: ResMut<Shown>, mut images: ResMut<Assets<Image>>, mut art
     }
 }
 
-/// The fade, applied: the alpha on every colour, and the row laid out only
-/// while there is something to see.
-fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut panel: Query<&mut Node, With<Panel>>, mut art: Query<&mut ImageNode, With<ArtNode>>, mut lines: Query<(&Line, &mut TextColor)>) {
-    if !shown.presence.tick(time.elapsed_secs(), time.delta_secs(), cfg.media.fade) {
+/// The keys' asks, while the panel is wanted at all.
+fn act(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut actions: MessageReader<Action>) {
+    for action in actions.read() {
+        match action {
+            Action::ShowMedia => shown.presence.show(time.elapsed_secs(), cfg.media.hold),
+            Action::End(_) => {}
+        }
+    }
+}
+
+/// The fade, applied: the alpha on every colour, the row laid out only
+/// while there is something to see, and the keys claimed while it is in.
+fn fade(cfg: Res<Config>, time: Res<Time>, mut shown: ResMut<Shown>, mut focus: ResMut<Focus>, mut panel: Query<&mut Node, With<Panel>>, mut art: Query<&mut ImageNode, With<ArtNode>>, mut lines: Query<(&Line, &mut TextColor)>) {
+    let moved = shown.presence.tick(time.elapsed_secs(), time.delta_secs(), cfg.media.fade);
+    if focus.media != shown.presence.wanted {
+        focus.media = shown.presence.wanted;
+    }
+    if !moved {
         return;
     }
     let alpha = shown.presence.alpha;

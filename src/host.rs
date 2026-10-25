@@ -1,6 +1,6 @@
-//! The host side: the canvas and the displays; ending the run on input, on
-//! losing focus (the session locking), or at the time limit; snapshots for
-//! the loop; and frame-time logging.
+//! The host side: the canvas and the displays; ending the run when the
+//! input asks (`input.rs`), on losing focus (the session locking), or at
+//! the time limit; snapshots for the loop; and frame-time logging.
 //!
 //! The canvas is one image as wide as every display side by side and as
 //! tall as the tallest. The scene is rendered into it once per frame by
@@ -11,19 +11,15 @@
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{RenderTarget, ScalingMode};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::input::keyboard::KeyboardInput;
-use bevy::input::mouse::{MouseButtonInput, MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::{Monitor, MonitorSelection, RawHandleWrapper, WindowFocused, WindowMode, WindowRef};
 
 use crate::config::Config;
+use crate::input::Action;
 use crate::scene::{spawn_camera, View};
 use crate::Args;
-
-/// How far the pointer may drift before it counts as movement, in pixels.
-const POINTER_SLACK: f32 = 12.0;
 
 pub struct HostPlugin;
 
@@ -202,20 +198,17 @@ fn end_on_lock_or_limit(args: Res<Args>, cfg: Res<Config>, time: Res<Time>, mut 
     }
 }
 
-/// Any key, click, wheel or pointer movement ends the run, unless --hold.
-#[allow(clippy::too_many_arguments)]
-fn end_on_input(args: Res<Args>, mut keys: MessageReader<KeyboardInput>, mut buttons: MessageReader<MouseButtonInput>, mut wheel: MessageReader<MouseWheel>, mut motion: MessageReader<MouseMotion>, mut drifted: Local<Vec2>, mut exit: MessageWriter<AppExit>) {
-    if args.hold {
-        return;
-    }
-    *drifted += motion.read().map(|m| m.delta).sum::<Vec2>();
-    let why = keys.read().next().map(|k| format!("key {:?}", k.key_code))
-        .or_else(|| buttons.read().next().map(|b| format!("button {:?}", b.button)))
-        .or_else(|| wheel.read().next().map(|_| "wheel".to_string()))
-        .or_else(|| (drifted.length() > POINTER_SLACK).then(|| format!("pointer moved {:.0} px", drifted.length())));
-    if let Some(why) = why {
-        info!("ending: {why}");
-        exit.write(AppExit::Success);
+/// The input asking for the end (any key or pointer movement that is not
+/// the panel's, see `input.rs`) ends the run, unless --hold.
+fn end_on_input(args: Res<Args>, mut actions: MessageReader<Action>, mut exit: MessageWriter<AppExit>) {
+    for action in actions.read() {
+        if let Action::End(why) = action {
+            if args.hold {
+                continue;
+            }
+            info!("ending: {why}");
+            exit.write(AppExit::Success);
+        }
     }
 }
 
