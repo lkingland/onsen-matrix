@@ -79,7 +79,9 @@ terminal logs to `~/.local/state/onsen-matrix/log`.
 - `bin/dev`: the loop. `bin/dev` builds and holds the picture on one display
   (`ONSEN_MATRIX_MONITOR`, default HDMI-A-1); `bin/dev snap` writes the
   canvas to `target/snap.png`; `bin/dev stop`. `bin/burn-in` samples a long
-  run into a CSV and `bin/burn-in report` summarises it.
+  run into a CSV and `bin/burn-in report` summarises it. `bin/install`
+  builds the package from the checkout and installs it: the only way a
+  change reaches the installed binary the menu runs.
 
 ## The picture
 
@@ -183,8 +185,12 @@ density and glyph size are the levers.
 
 ## Packaging
 
-`makepkg -D pkg -si` builds the package from the checkout and installs
-`/usr/bin/onsen-matrix` and `/usr/share/onsen-matrix/assets`, nothing else.
+`makepkg -D pkg -si`, or `bin/install`, builds the package from the
+checkout and installs `/usr/bin/onsen-matrix` and
+`/usr/share/onsen-matrix/assets`, nothing else. The package's version
+names the commit (`pacman -Q onsen-matrix`), so what is running is never
+in doubt. `bin/dev` runs the checkout's build and never touches the
+installed one.
 The binary finds its assets at `ONSEN_MATRIX_ASSETS`, the installed
 location, or the source tree it was built from. It depends on a Vulkan
 driver, Wayland, Noto Sans CJK and Hyprland, and touches no system

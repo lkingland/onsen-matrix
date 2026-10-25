@@ -1,0 +1,18 @@
+#!/bin/bash
+# Builds the package from this checkout and installs it, so that what the
+# menu runs is what is here. Nothing else puts a build on the desk: the
+# loop (bin/dev) runs the checkout's own binary and leaves the installed
+# one alone, so after a change this is the step that makes it real.
+#
+# The package's version names the commit it was built from; the install
+# prints it, so `pacman -Q onsen-matrix` always says what is running.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+  echo "note: the checkout has uncommitted changes; the package is built from them but named after the last commit" >&2
+fi
+# -f: build even when a package of this version is already here.
+makepkg -D pkg -sif
+rm -f pkg/*.pkg.tar.*
+echo "installed: $(pacman -Q onsen-matrix)  (checkout: $(git rev-parse --short=8 HEAD))"

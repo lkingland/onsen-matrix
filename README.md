@@ -32,6 +32,11 @@ That gives you `onsen-matrix`, which takes every display, and
 by make and model or connector. It needs Hyprland, a Vulkan driver and the
 Noto CJK fonts, and touches nothing else on your system.
 
+Hacking on it? `bin/install` does the same from your checkout and prints
+the version installed, which names the commit. The menu and the launcher
+run the installed binary, never the checkout's build, so after a change
+that is the step that puts it on screen; `bin/dev` only previews.
+
 ## Pairs with Omarchy
 
 It pairs best with [Omarchy](https://omarchy.org): it is the screensaver of
